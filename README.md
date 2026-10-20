@@ -27,14 +27,14 @@ geometry MCP to turn place text into `loc_id`s by default. You can supply a
    .\.venv\Scripts\python -m pip install -r requirements.txt
    ```
 
-2. **Get the data for your country.** Download the
-   [USA bundle](https://downloads.daedalmap.com/downloadable/grants/usa/grant-usa-0.1.0.zip)
-   (749 MB) or the
-   [Canada bundle](https://downloads.daedalmap.com/downloadable/grants/can/grant-can-0.1.0.zip)
-   (2.4 MB). Unzip either into this repository's `data/` folder so the result
-   contains `data/countries/`. You may unzip both into the same `data/` folder.
-   Each ZIP includes source details and checksums in `grant_data_manifest.json`.
-   You can also build tables from upstream sources with the pipeline below.
+2. **Get the data for your country.** Open the
+   [Grant Tools download page](https://www.daedalmap.com/projects/grant-tools)
+   and choose the USA or Canada grant data bundle. Review its size, coverage,
+   sources, and checksum before confirming the download. Unzip the bundle into
+   this repository's `data/` folder so the result contains `data/countries/`.
+   You may unzip both into the same `data/` folder. Each ZIP also includes
+   source details and checksums in `grant_data_manifest.json`. You can build
+   tables from upstream sources with the pipeline below.
 
 3. **Configure only if needed.** `data/` is the default. If you unzipped the
    bundle elsewhere, copy `.env.example` to `.env` and set `GRANT_DATA_ROOT` to
