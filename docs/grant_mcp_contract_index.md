@@ -1,0 +1,9 @@
+# Grant MCP Contract Index
+
+Contract docs for the phase-aware grant MCP.
+
+Current docs:
+
+- [grant_mcp_contract_v1.md](grant_mcp_contract_v1.md) - first concrete tool contract for `grant_intake_or_update_project` and `grant_analyze_current_phase`
+- [grant_phase_aware_mcp_design.md](grant_phase_aware_mcp_design.md) - broader phase-aware orchestration design
+- [grant_mcp_mode.md](grant_mcp_mode.md) - grants-specific MCP product direction
