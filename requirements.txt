@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn>=0.30
+pandas>=2.2
+numpy>=2.0
+duckdb>=1.5.0
+# 23.0.1 fixes CVE-2026-25087.
+pyarrow>=23.0.1
+openpyxl>=3.1
+requests>=2.32
