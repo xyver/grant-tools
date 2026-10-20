@@ -2,7 +2,7 @@
 
 Grant Tools runs as an independent local MCP server. You need this repository,
 Python 3.11 or newer, an MCP client, and either a country data download or your
-own build of the source tables. The Research MCP is not required.
+own build of the source tables.
 
 Follow the [README quickstart](../README.md#quickstart) to install Python
 dependencies, get USA or Canada data, start `server.py`, and connect your MCP

@@ -1,9 +1,8 @@
 # Grant Tools
 
 A community-built grant research assistant adapted from DaedalMap's Research
-MCP. It runs from this repository as its own MCP server; the Research MCP and
-DaedalMap source checkout are not required. Describe a project in an MCP client
-and Grant Tools works through the
+MCP. Install it from this repository, connect an MCP client, and describe a
+project. Grant Tools works through the
 pre-submission phases: finding programs that fit, checking eligibility and
 blockers, pulling precedent from past awards, shortlisting, and helping with
 memos, budgets, and submission checklists. It never estimates odds of winning
