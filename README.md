@@ -176,5 +176,3 @@ upstream source records retain their respective source terms; see each bundle's
   and collectors
 - [docs/grant_source_matrix.md](docs/grant_source_matrix.md) - source
   inventory by evidence layer
-- [README_history.md](README_history.md) - architecture, scoring details, and
-  build history

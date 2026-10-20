@@ -81,9 +81,8 @@ log is safer for hosted collectors and replay.
 
 ## Cadence Matrix
 
-Canonical hosted/VPS cadence policy lives in
-[cloud_management.md](../../../../docs/cloud_management.md#canonical-cadence-model).
-This grant matrix records source-specific choices only.
+This grant matrix records source-specific refresh choices. Schedule the local
+collectors to suit your own use.
 
 Cadence is split into source-change expectations, lightweight polling, and
 heavier processing. The collector should normally do the first cheap step; the

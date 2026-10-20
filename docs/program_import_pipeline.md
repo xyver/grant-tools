@@ -13,8 +13,7 @@ Read alongside:
 - [grant_collectors.md](grant_collectors.md) - curated CSV field definitions
 - [proposal_section_model.md](proposal_section_model.md) - section lists and
   the standard for what a "complete" program row carries
-- [research/section_list_findings.md](research/section_list_findings.md) -
-  access_path and lifecycle_status, and what is already researched
+- The source URLs and validation fields in the program catalog CSVs.
 
 ---
 

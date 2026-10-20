@@ -90,8 +90,7 @@ As of 2026-07-21: **65 of 127 programs have a section list** (up from 10).
 Every researched row is agency-verified. The other 62 fall through to the
 funder_type default.
 
-Status, findings, and the merge command:
-[research/section_list_findings.md](research/section_list_findings.md).
+Status and findings are recorded in the program catalog and template CSVs.
 
 That research surfaced something more important than section names: **eight
 catalog programs have no direct application path for any organization**
@@ -222,10 +221,8 @@ Link to the public source instead.
 
 ## Research task: the remaining uncovered programs
 
-Standing work. Current status and what has already been checked:
-[research/section_list_findings.md](research/section_list_findings.md) - read
-it before starting a pass, so you do not re-search a program already recorded
-as having nothing published.
+Standing work. Check existing program catalog and template rows before
+researching a program again.
 
 Two method notes that cost real time to learn:
 
@@ -253,5 +250,4 @@ For each: find the agency's own required-sections list, add a
 URL, and record one example. Where the agency publishes nothing, record that
 finding too so the next person does not re-search it.
 
-Track findings in [USA grant research.md](USA%20grant%20research.md) rather
-than in new per-program files.
+Track findings in the program catalog and template CSVs with source URLs.

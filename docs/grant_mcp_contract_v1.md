@@ -65,7 +65,7 @@ the scaffold rather than expecting the server to normalize them silently.
 
 Related docs:
 
-- [grant_phase_aware_mcp_design.md](grant_phase_aware_mcp_design.md)
+- [grant_mcp_mode.md](grant_mcp_mode.md)
 - [grant_mcp_mode.md](grant_mcp_mode.md)
 - [../README.md](../README.md)
 
