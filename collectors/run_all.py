@@ -20,8 +20,9 @@ from arc_grant_announcements import COLLECTOR as ARC
 from california_grants_portal import COLLECTOR as CALIFORNIA
 from canada_grant_announcements import COLLECTOR as CANADA
 from feeds import _env_file_value, collect, default_state_dir, format_result, probe
+from state_dept_press_releases import COLLECTOR as STATE_DEPT
 
-COLLECTORS = {"arc": ARC, "california": CALIFORNIA, "canada": CANADA}
+COLLECTORS = {"arc": ARC, "california": CALIFORNIA, "canada": CANADA, "state_dept": STATE_DEPT}
 
 
 def selected_collectors(raw: str, parser: argparse.ArgumentParser):

@@ -63,7 +63,7 @@ Settings come from environment variables or a `.env` file next to the code.
 |---|---|---|
 | `GRANT_DATA_ROOT` | `./data` | Folder containing `countries/` (the downloaded bundle or your own build) |
 | `GRANT_STATE_DIR` | `./state` | Where collectors write snapshots and where the tools read them |
-| `GRANT_COLLECTORS` | `all` | Announcement collectors enabled for `collectors/run_all.py`: `arc`, `california`, `canada`, `all`, or `none` |
+| `GRANT_COLLECTORS` | `all` | Announcement collectors enabled for `collectors/run_all.py`: `arc`, `california`, `canada`, `state_dept`, `all`, or `none` |
 | `GEOMETRY_MCP_URL` | `https://app.daedalmap.com/mcp` | DaedalMap geometry tools used for place to `loc_id` lookups |
 | `GRANT_MCP_HOST` / `GRANT_MCP_PORT` | `127.0.0.1` / `7020` | Where the server listens |
 | `GRANT_MCP_ACCESS_TOKENS` | empty | Comma-separated bearer tokens. Leave empty for local use; set before exposing the server beyond your machine |
@@ -88,7 +88,7 @@ adds recent announcement leads; it does not replace historical award tables.
 |---|---|---|---|
 | **Country bundles** | Processed award, program, and opportunity tables, ready to use | Download once | Separate USA and Canada downloads above |
 | **Historical pipeline** | Downloaders fetch raw upstream files; converters turn them into processed tables in `data/` | Occasionally (monthly, or when a source publishes) | `pipeline/downloaders/`, `pipeline/converters/` |
-| **Collectors** | Watch live announcement feeds (ARC, California, Canada) for new opportunities | As often as you like; daily is plenty | `collectors/` |
+| **Collectors** | Watch live announcement feeds (ARC, California, Canada, US State Department) for new opportunities | As often as you like; daily is plenty | `collectors/` |
 
 For example, build California opportunities and awards yourself:
 
@@ -103,7 +103,8 @@ same `data/countries/` layout as the downloadable bundles.
 
 ## Announcement collectors
 
-The included ARC, California, and Canada collectors can run independently of
+The included ARC, California, Canada, and US State Department collectors can
+run independently of
 the historical pipeline. List them, probe feeds without writing, and then run
 the ones you want:
 
@@ -135,6 +136,7 @@ The collectors need no API keys. Their snapshots go to `GRANT_STATE_DIR`.
 | ARC announcements | Collector | US federal-state commission |
 | California Grants Portal feed | Collector | data.ca.gov |
 | Canada government news | Collector | canada.ca terms |
+| US State Department press releases | Collector | Public domain (US government work) |
 
 Cite the original sources when you use their data.
 

@@ -25,8 +25,8 @@ of proof.
 | US federal grant programs | US | Yes | Yes | Yes | Partial | No | Eligibility rows plus USAspending, Grants.gov, and State Dept live announcements. |
 | Grants.gov | US | No | No | Yes | No | No | `grants_gov_open_opportunities/latest.csv`; open-opportunity layer only. |
 | USAspending grants | US | No | Yes | No | No | No | Federal award precedent by CFDA/assistance listing. |
-| State Dept press releases | US/international | No | No | No | Yes | Short Ops history only | Live signals for foreign assistance; not award precedent. |
-| Canada federal G&C | Canada | Yes | Yes | No | Yes | Short Ops history only | Canada backend has federal disclosure plus federal announcement feed. |
+| State Dept press releases | US/international | No | No | No | Yes | Collector `observed/` log | Live signals for foreign assistance; not award precedent. |
+| Canada federal G&C | Canada | Yes | Yes | No | Yes | Collector `observed/` log | Canada backend has federal disclosure plus federal announcement feed. |
 | Canada Tri-Agency | Canada | No | Yes | No | Partial | No | Research-award precedent; separate from general G&C. |
 | California Grants Portal | California | Partial | Yes | Yes | Yes | Observed JSONL landing | Live collector built; raw historical/open CSVs downloaded and converted to parquet. Curated rows now cover reusable California state pathways from SGC, CAL FIRE, Caltrans, CEC EPIC/solicitations, CalSEED, and LCI/ICARP. |
 | ARC program family | Appalachia | Yes | Not confirmed | Page-based | Yes | Observed JSONL landing | Curated rows now cover POWER, INSPIRE, Area Development, ARISE, WORC, READY, Access to Capital, Broadband, Local Access Roads, and Energy Hub. Live collector watches ARC announcements separately. |

@@ -10,7 +10,9 @@ python collectors/run_all.py --only arc,california --probe
 python collectors/run_all.py --only arc,california
 ```
 
-Available names are `arc`, `california`, and `canada`. Use `--probe` to check
+Available names are `arc`, `california`, `canada`, and `state_dept`. The State
+Department feeds expose only their 10 most recent items, so run that one at
+least daily. Use `--probe` to check
 feeds without writing snapshots. Set `GRANT_COLLECTORS=arc,california` in
 `.env` to keep a selection; use `none` to disable scheduled polls. Run the
 command once per check, or schedule it daily with Task Scheduler or cron.
