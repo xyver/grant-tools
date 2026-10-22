@@ -10,6 +10,10 @@ GRANT_DATA_ROOT, and writes to --out:
     current.json                    the control the project page reads
     build_receipt.json              sizes, SHA-256s, and the checks that passed
 
+A file entry is a path, or {"path": ..., "columns": [...]} to ship only
+those columns (the tools' lookup columns plus a little context) when the
+full table is large; the full table stays a pipeline build.
+
 It never uploads. Publishing the ZIP and then current.json to the downloads
 bucket is a separate, manual step. Fails without writing a ZIP if a listed
 file is missing, a table is unreadable, or the control would not pass the
@@ -22,6 +26,7 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -56,6 +61,18 @@ def check_table(path: Path) -> int:
         with path.open("r", encoding="utf-8") as handle:
             return max(sum(1 for _ in handle) - 1, 0)
     raise ValueError(f"Unsupported table type: {path}")
+
+
+def trimmed_copy(path: Path, columns: list[str], work_dir: Path) -> Path:
+    """A parquet with only `columns`, for shipping a slim bundle."""
+    import pyarrow.parquet as pq
+
+    missing = sorted(set(columns) - set(pq.ParquetFile(path).schema_arrow.names))
+    if missing:
+        raise ValueError(f"{path.name} has no column(s): {', '.join(missing)}")
+    out = work_dir / f"{len(list(work_dir.iterdir()))}_{path.name}"
+    pq.write_table(pq.read_table(path, columns=columns), out, compression="zstd")
+    return out
 
 
 def validate_control(control: dict, country: str) -> list[str]:
@@ -97,13 +114,17 @@ def main(argv: list[str] | None = None) -> int:
     config = json.loads(args.sources.read_text(encoding="utf-8"))[args.country]
     iso3 = ISO3[args.country]
 
-    files, source_details = [], []
+    work = tempfile.TemporaryDirectory()
+    work_dir = Path(work.name)
+    files, source_details, staged = [], [], {}
     for source in config["sources"]:
         detail = {k: source[k] for k in ("name", "url", "licence", "vintage")}
         if source.get("also_from"):
             detail["also_from"] = source["also_from"]
         source_details.append(detail)
-        for rel in source["files"]:
+        for item in source["files"]:
+            rel = item if isinstance(item, str) else item["path"]
+            columns = None if isinstance(item, str) else item.get("columns")
             path = args.data_root / rel
             if not path.is_file():
                 print(f"Missing {rel} under {args.data_root}; nothing written.")
@@ -111,13 +132,24 @@ def main(argv: list[str] | None = None) -> int:
             if not rel.startswith(f"countries/{iso3}/"):
                 print(f"{rel} is outside countries/{iso3}/; nothing written.")
                 return 1
-            files.append({
+            if columns:
+                try:
+                    path = trimmed_copy(path, columns, work_dir)
+                except ValueError as exc:
+                    print(f"{exc}; nothing written.")
+                    return 1
+            staged[rel] = path
+            entry = {
                 "path": rel,
                 "bytes": path.stat().st_size,
                 "sha256": sha256_of(path),
                 "rows": check_table(path),
                 "source": source["name"],
-            })
+            }
+            if columns:
+                entry["columns"] = columns
+                entry["note"] = "Trimmed to these columns; build the full table with the pipeline."
+            files.append(entry)
 
     vintages = sorted(s["vintage"] for s in config["sources"])
     manifest = {
@@ -139,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     manifest_arcname = f"countries/{iso3}/{data_bundle.MANIFEST_NAME}"
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for entry in files:
-            bundle.write(args.data_root / entry["path"], entry["path"])
+            bundle.write(staged[entry["path"]], entry["path"])
         bundle.writestr(manifest_arcname, json.dumps(manifest, indent=2) + "\n")
     with zipfile.ZipFile(zip_path) as bundle:
         bad = bundle.testzip()

@@ -76,6 +76,29 @@ class BundleBuilderTests(unittest.TestCase):
             self.assertEqual(manifest["schema_version"], data_bundle.BUNDLE_SCHEMA_VERSION)
             self.assertEqual(manifest["files"][0]["rows"], 1)
 
+    def test_columns_trim_the_shipped_table(self):
+        import pandas as pd
+        import pyarrow.parquet as pq
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data_root, out = Path(tmp) / "data", Path(tmp) / "out"
+            table = data_root / "countries" / "CAN" / "big" / "CAN.parquet"
+            table.parent.mkdir(parents=True)
+            pd.DataFrame({"keep": [1, 2], "drop": ["long text", "more text"]}).to_parquet(table)
+            sources = Path(tmp) / "sources.json"
+            _write(sources, {"can": {"coverage": "x", "sources": [{
+                "name": "Big", "url": "u", "licence": "l", "vintage": "2026-10-21",
+                "files": [{"path": "countries/CAN/big/CAN.parquet", "columns": ["keep"]}]}]}})
+            code = builder.main(["--country", "can", "--version", "1.0.0", "--out", str(out),
+                                 "--data-root", str(data_root), "--sources", str(sources)])
+            self.assertEqual(code, 0)
+            extracted = Path(tmp) / "x"
+            with zipfile.ZipFile(out / "grant-can-1.0.0.zip") as bundle:
+                bundle.extractall(extracted)
+                manifest = json.loads(bundle.read(f"countries/CAN/{data_bundle.MANIFEST_NAME}"))
+            self.assertEqual(pq.ParquetFile(extracted / "countries/CAN/big/CAN.parquet").schema_arrow.names, ["keep"])
+            self.assertEqual(manifest["files"][0]["columns"], ["keep"])
+
     def test_missing_table_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             sources = Path(tmp) / "sources.json"
