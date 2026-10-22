@@ -24,6 +24,12 @@ Sources (all confirmed live 2026-06-28):
 
 Usage:
     python download_canada_tri_agency.py
+    python download_canada_tri_agency.py --only sshrc,cihr --skip-existing
+
+The agencies can run as separate processes in parallel (the file host is
+slow, about 60 KB/s per connection in Oct 2026). Each run merges its
+agencies into manifest.json. --skip-existing resumes an interrupted run:
+files are written as .part and renamed only when complete.
 
 Output:
     Raw data saved to: data/Raw data/canada_tri_agency/
@@ -32,6 +38,7 @@ Output:
     - cihr/cihr_investments_investissements_irsc_{yyyyyy}.xlsx
     - manifest.json (per-file download results, sizes, source resource ids)
 """
+import argparse
 import json
 import re
 import sys
@@ -40,8 +47,9 @@ from pathlib import Path
 
 import requests
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "Raw data" / "canada_tri_agency"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DATA_DIR = RAW_ROOT / "canada_tri_agency"
 
 TIMEOUT = 60
 DOWNLOAD_TIMEOUT = 300
@@ -87,14 +95,16 @@ def download_file(url, output_path):
     resp = requests.get(url, timeout=DOWNLOAD_TIMEOUT, stream=True)
     resp.raise_for_status()
     total = 0
-    with open(output_path, "wb") as f:
+    partial = output_path.with_name(output_path.name + ".part")
+    with open(partial, "wb") as f:
         for chunk in resp.iter_content(chunk_size=256 * 1024):
             f.write(chunk)
             total += len(chunk)
+    partial.replace(output_path)
     return total
 
 
-def download_agency(key, config, manifest):
+def download_agency(key, config, manifest, skip_existing=False):
     label = config["label"]
     out_dir = RAW_DATA_DIR / key
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -119,7 +129,10 @@ def download_agency(key, config, manifest):
         filename = url.rsplit("/", 1)[-1]
         output_path = out_dir / filename
         try:
-            size = download_file(url, output_path)
+            if skip_existing and output_path.is_file() and output_path.stat().st_size > 0:
+                size = output_path.stat().st_size
+            else:
+                size = download_file(url, output_path)
             agency_manifest["years_downloaded"].append({
                 "year": year_label,
                 "filename": filename,
@@ -139,6 +152,15 @@ def download_agency(key, config, manifest):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Download Tri-Agency award files")
+    parser.add_argument("--only", default=",".join(AGENCIES), help="Comma-separated agencies: nserc,sshrc,cihr")
+    parser.add_argument("--skip-existing", action="store_true", help="Keep files already downloaded (resume)")
+    args = parser.parse_args()
+    chosen = [key.strip().lower() for key in args.only.split(",") if key.strip()]
+    unknown = sorted(set(chosen) - set(AGENCIES))
+    if unknown:
+        parser.error(f"unknown agency: {', '.join(unknown)}")
+
     print("=" * 70)
     print("Canada Tri-Agency Research Funding Downloader (NSERC / SSHRC / CIHR)")
     print("=" * 70)
@@ -160,10 +182,17 @@ def main():
         "agencies": {},
     }
 
-    for key, config in AGENCIES.items():
-        download_agency(key, config, manifest["agencies"])
+    for key in chosen:
+        download_agency(key, AGENCIES[key], manifest["agencies"], skip_existing=args.skip_existing)
 
+    # Merge with agencies recorded by other runs (they may run in parallel).
     manifest_path = RAW_DATA_DIR / "manifest.json"
+    try:
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        previous = {}
+    merged = {**(previous.get("agencies") or {}), **manifest["agencies"]}
+    manifest["agencies"] = merged
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
