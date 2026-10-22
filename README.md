@@ -16,6 +16,30 @@ shortlisted program, and program-page links for open status (labelled
 unverified). A request a country cannot serve comes back as a named
 `capability_gaps` entry, never as an empty result.
 
+## What it is built for
+
+Grant Tools was built for **disaster recovery, hazard mitigation, community
+resilience, and climate adaptation** work, and its curated program catalogs
+show it. These catalogs are what the shortlist ranks: a program has to be in
+one to be matched, checked for eligibility and blockers, and scored.
+
+| Catalog | Programs | Disaster, resilience, or climate | Other categories it carries |
+|---|---:|---:|---|
+| US (`docs/grant_funding_programs.csv`) | 127 (105 federal, 16 state, 5 foundation, 1 other) | 87 | economic development 26, humanitarian 21, infrastructure 21, international development 18, research 15, housing 9, research software 8, energy 7, transportation 7, commercialization 7, capacity building 7, workforce 6, food security 5, entrepreneurship 5, broadband 2, health 2, and smaller groups |
+| Canada (`docs/canada_grant_funding_programs.csv`) | 48 (44 federal, 3 BC, 1 nonprofit) | 41 | research 12, data infrastructure 7, AI and data science 6, public safety 5, policy research 5, research software 5, geospatial 5, Indigenous research 4, Indigenous programs 3, and smaller groups |
+
+Counts are programs carrying each tag (a program can carry several), as of
+October 2026.
+
+The data underneath is broader than the catalogs. USAspending, NSF, NIH, and
+Grants.gov (every posted and forecasted opportunity) cover all US federal
+programs, and Canada's Grants and Contributions disclosure and the
+Tri-Agency award tables cover all Canadian federal programs. A project outside
+the focus areas still runs, but expect a short shortlist: the funders are in
+the data, the programs are not yet in a catalog. Adding them is the
+[program import pipeline](docs/program_import_pipeline.md), and
+`validate_program.py` checks a new row.
+
 Place handling uses DaedalMap `loc_id`s (stable identifiers for counties,
 states, provinces, and other places). Grant Tools calls DaedalMap's hosted
 geometry MCP to turn place text into `loc_id`s by default. You can supply a
@@ -37,8 +61,10 @@ geometry MCP to turn place text into `loc_id`s by default. You can supply a
    sources, and checksum before confirming the download. Unzip the bundle into
    this repository's `data/` folder so the result contains `data/countries/`.
    You may unzip both into the same `data/` folder. Each ZIP also includes
-   source details and checksums in `grant_data_manifest.json`. You can build
-   tables from upstream sources with the pipeline below.
+   source details and checksums in `countries/<USA|CAN>/grant_data_manifest.json`.
+   `/health` on the running server shows which bundles are installed and
+   whether this code version can read them. You can build tables from
+   upstream sources with the pipeline below.
 
 3. **Configure only if needed.** `data/` is the default. If you unzipped the
    bundle elsewhere, copy `.env.example` to `.env` and set `GRANT_DATA_ROOT` to
@@ -66,6 +92,7 @@ Settings come from environment variables or a `.env` file next to the code.
 | Variable | Default | Meaning |
 |---|---|---|
 | `GRANT_DATA_ROOT` | `./data` | Folder containing `countries/` (the downloaded bundle or your own build) |
+| `GRANT_RAW_ROOT` | `<GRANT_DATA_ROOT>/Raw data` | Where the pipeline's downloaders save raw upstream files |
 | `GRANT_STATE_DIR` | `./state` | Where collectors write snapshots and where the tools read them |
 | `GRANT_COLLECTORS` | `all` | Announcement collectors enabled for `collectors/run_all.py`: `arc`, `california`, `canada`, `state_dept`, `all`, or `none` |
 | `GEOMETRY_MCP_URL` | `https://app.daedalmap.com/mcp` | DaedalMap geometry tools used for place to `loc_id` lookups |
