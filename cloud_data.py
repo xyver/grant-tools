@@ -35,9 +35,15 @@ def _sql_literal(value) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+# A self-hosted run owns its machine, and country-wide USA queries need more
+# than 256MB. A hosted object-store runtime shares a small box, so it stays low.
+DEFAULT_MEMORY_LIMIT = {"local": "1GB", "object_store": "256MB"}
+
+
 def _new_connection():
     con = duckdb.connect(database=":memory:")
-    con.execute(f"SET memory_limit={_sql_literal(os.environ.get('GRANT_DUCKDB_MEMORY_LIMIT', '256MB'))}")
+    memory_limit = os.environ.get("GRANT_DUCKDB_MEMORY_LIMIT", "") or DEFAULT_MEMORY_LIMIT[data_mode()]
+    con.execute(f"SET memory_limit={_sql_literal(memory_limit)}")
     con.execute(f"SET threads={max(1, int(os.environ.get('GRANT_DUCKDB_THREADS', '2')))}")
     con.execute("SET preserve_insertion_order=false")
     if data_mode() == "object_store":
