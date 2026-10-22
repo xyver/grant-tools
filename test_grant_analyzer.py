@@ -317,6 +317,7 @@ class CanBackendAcademicPathwayTests(unittest.TestCase):
         self.assertIn("can_bc_bckdf", ids)
 
 
+@requires_country_data("CAN")
 class CanBackendPrecedentTests(unittest.TestCase):
     def test_dfaa_merges_known_real_totals(self):
         # Locks in the real numbers confirmed during the eligibility-table

@@ -1,0 +1,94 @@
+{
+  "_note": "Release metadata for build_country_bundle.py. Update a source's vintage when its tables are rebuilt. Paths are relative to GRANT_DATA_ROOT.",
+  "usa": {
+    "coverage": "Federal awards 1999-2026; NSF/NIH 2017-2026; California awards FY2022-2025; all Grants.gov posted and forecasted opportunities Oct 2026",
+    "sources": [
+      {
+        "name": "USAspending",
+        "url": "https://www.usaspending.gov/",
+        "licence": "US federal government work",
+        "vintage": "2026-06-24",
+        "files": [
+          "countries/USA/usaspending_grants/USA.parquet",
+          "countries/USA/usaspending_grants/cfda_program_summary.parquet"
+        ]
+      },
+      {
+        "name": "NSF Award Search",
+        "url": "https://www.nsf.gov/awardsearch/",
+        "licence": "US federal government work",
+        "vintage": "2026-06-25",
+        "files": ["countries/USA/nsf_awards/USA.parquet"]
+      },
+      {
+        "name": "NIH RePORTER",
+        "url": "https://reporter.nih.gov/",
+        "licence": "US federal government work",
+        "vintage": "2026-06-25",
+        "files": ["countries/USA/nih_reporter_projects/USA.parquet"]
+      },
+      {
+        "name": "Grants.gov",
+        "url": "https://www.grants.gov/",
+        "licence": "US federal government work",
+        "vintage": "2026-10-21",
+        "files": ["countries/USA/grants_gov_open_opportunities/latest.csv"]
+      },
+      {
+        "name": "California Grants Portal opportunities",
+        "url": "https://publish.data.ca.gov/dataset/california-grants-portal",
+        "licence": "Other (Public Domain), per source catalog",
+        "vintage": "2026-07-07",
+        "files": ["countries/USA/california_grants_portal/opportunities.parquet"]
+      },
+      {
+        "name": "California Grants Portal awards FY2022-2025",
+        "url": "https://publish.data.ca.gov/dataset/california-grants-portal-grant-awards-2024-2025",
+        "licence": "Catalog rights: No restrictions; licence field unspecified. Grants Portal Use Policy says site information is generally public domain; see https://www.grants.ca.gov/use-policy/",
+        "vintage": "2026-07-07",
+        "files": ["countries/USA/california_grants_portal/awards.parquet"]
+      }
+    ]
+  },
+  "can": {
+    "coverage": "Federal program summaries 1989-2026; Tri-Agency research awards (NSERC, SSHRC, CIHR); BC awards FY1998-2025",
+    "sources": [
+      {
+        "name": "Canada Grants and Contributions",
+        "url": "https://open.canada.ca/data/en/dataset/432527ab-7aac-45b5-81d6-7597107a7013",
+        "licence": "Open Government Licence - Canada",
+        "vintage": "2026-06-29",
+        "files": ["countries/CAN/grants_contributions/program_summary.parquet"]
+      },
+      {
+        "name": "NSERC awards",
+        "url": "https://open.canada.ca/data/en/dataset/c1b0f627-8c29-427c-ab73-33968ad9176e",
+        "licence": "Open Government Licence - Canada",
+        "vintage": "2026-10-21",
+        "files": ["countries/CAN/tri_agency_nserc/CAN.parquet"]
+      },
+      {
+        "name": "SSHRC awards",
+        "url": "https://open.canada.ca/data/en/dataset/b4e2b302-9bc6-4b33-b880-6496f8cef0f1",
+        "licence": "Open Government Licence - Canada",
+        "vintage": "2026-10-21",
+        "files": ["countries/CAN/tri_agency_sshrc/CAN.parquet"]
+      },
+      {
+        "name": "CIHR investments",
+        "url": "https://open.canada.ca/data/en/dataset/49edb1d7-5cb4-4fa7-897c-515d1aad5da3",
+        "licence": "Open Government Licence - Canada",
+        "vintage": "2026-10-21",
+        "files": ["countries/CAN/tri_agency_cihr/CAN.parquet"]
+      },
+      {
+        "name": "BC grant awards",
+        "url": "https://catalogue.data.gov.bc.ca/dataset/f878ebde-cbee-4bf2-bd5d-4e70c930a143",
+        "also_from": ["https://catalogue.data.gov.bc.ca/dataset/bf1cd755-f2ce-4b86-af07-73dc22b36a8b"],
+        "licence": "Open Government Licence - British Columbia",
+        "vintage": "2026-07-07",
+        "files": ["countries/CAN/bc_grant_awards/awards.parquet"]
+      }
+    ]
+  }
+}

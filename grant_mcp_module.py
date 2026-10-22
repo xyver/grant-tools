@@ -28,6 +28,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import can_backend  # noqa: E402
+import data_bundle  # noqa: E402
 import grant_analyzer as ga  # noqa: E402
 import us_backend  # noqa: E402
 from runtime_paths import STATE_DIR  # noqa: E402
@@ -1266,6 +1267,23 @@ def _run_phase_1(session: dict[str, Any], *, depth: str, top_n: int) -> dict[str
     backend = ga.get_backend(country_code)
     area_loc_ids = _project_area_loc_ids(profile)
 
+    # Scoring and precedent read the country's data bundle; discovery needs
+    # only the program catalog. Say which, rather than failing on a missing
+    # or incompatible bundle.
+    bundle = data_bundle.bundle_status(country_code)
+    bundle_ok = bool(bundle["installed"]) and bundle["compatible"] is not False
+    if bundle["note"]:
+        limitations.append(bundle["note"])
+    if not bundle_ok and ga.supports(country_code, "readiness_scoring"):
+        return _error_result(
+            "grant_analyze_current_phase",
+            "data_bundle_unavailable",
+            bundle["note"] or f"The {country_code} data bundle is not usable.",
+            session_id=session["session_id"],
+            phase_run=PHASE_1,
+            bundle_status=bundle,
+        )
+
     if ga.supports(country_code, "readiness_scoring"):
         scored, location_breakdown = _score_across_locations(backend, profile, area_loc_ids)
         selected_steps.extend(["match_grant_programs", "score_and_rank_programs"])
@@ -1362,7 +1380,7 @@ def _run_phase_1(session: dict[str, Any], *, depth: str, top_n: int) -> dict[str
         for blocker in (item.get("blockers") or [])
     )
 
-    if ga.supports(country_code, "precedent"):
+    if ga.supports(country_code, "precedent") and bundle_ok:
         precedent_summary = _precedent_summary(backend, top_matches, _field_value(profile, "org_type"))
         selected_steps.append("summarize_program_precedent")
 

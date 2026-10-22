@@ -668,6 +668,7 @@ class UnifiedCountryWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(intake["project_profile"]["org_type"]["value"], "academia")
 
+    @requires_country_data("CAN")
     def test_canada_phase_one_reports_precedent_by_default(self):
         intake = self._bc_session()
         result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
@@ -694,6 +695,7 @@ class UnifiedCountryWorkflowTests(unittest.TestCase):
         generic = can_backend.load_programs()["source_url"] == "https://search.open.canada.ca/grants/"
         self.assertEqual(int(generic.sum()), 0)
 
+    @requires_country_data("CAN")
     def test_canada_phase_two_and_three_use_the_shared_capability_paths(self):
         intake = self._bc_session()
         sid = intake["session_id"]
