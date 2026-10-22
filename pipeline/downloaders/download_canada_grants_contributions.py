@@ -29,8 +29,9 @@ from pathlib import Path
 
 import requests
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "Raw data" / "canada_grants_contributions"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DATA_DIR = RAW_ROOT / "canada_grants_contributions"
 
 CKAN_PACKAGE_ID = "432527ab-7aac-45b5-81d6-7597107a7013"
 CKAN_PACKAGE_SHOW_URL = f"https://open.canada.ca/data/api/3/action/package_show?id={CKAN_PACKAGE_ID}"

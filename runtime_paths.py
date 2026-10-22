@@ -45,6 +45,8 @@ def _env_path(*names: str) -> Path | None:
 # Processed data (the data bundle or your own pipeline build): a folder that
 # contains countries/. DATA_ROOT is accepted for older setups.
 DATA_ROOT = _env_path("GRANT_DATA_ROOT", "DATA_ROOT") or MODULE_DIR / "data"
+# Raw upstream downloads the pipeline converts into DATA_ROOT.
+RAW_ROOT = _env_path("GRANT_RAW_ROOT") or DATA_ROOT / "Raw data"
 # Collector snapshots; collectors/feeds.py writes here by default.
 STATE_DIR = _env_path("GRANT_STATE_DIR") or MODULE_DIR / "state"
 # DaedalMap geometry tools used for place text to loc_id lookups.

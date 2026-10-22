@@ -26,9 +26,10 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "Raw data" / "usaspending_grants"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "countries" / "USA" / "usaspending_grants"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DATA_DIR = RAW_ROOT / "usaspending_grants"
+OUTPUT_DIR = DATA_ROOT / "countries" / "USA" / "usaspending_grants"
 OUTPUT_FILE = OUTPUT_DIR / "USA.parquet"
 
 # Columns kept from the raw CSV, renamed for clarity. Dropped on purpose:

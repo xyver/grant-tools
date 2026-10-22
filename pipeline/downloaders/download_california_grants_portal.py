@@ -25,8 +25,9 @@ from urllib.parse import urlparse
 
 import requests
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "Raw data" / "california_grants_portal"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DATA_DIR = RAW_ROOT / "california_grants_portal"
 
 CKAN_BASE = "https://data.ca.gov/api/3/action"
 PACKAGE_SEARCH_URL = f"{CKAN_BASE}/package_search"

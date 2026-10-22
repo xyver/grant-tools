@@ -18,8 +18,9 @@ from pathlib import Path
 
 import requests
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DATA_DIR = PROJECT_ROOT / "data" / "Raw data" / "bc_grant_awards"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DATA_DIR = RAW_ROOT / "bc_grant_awards"
 
 CKAN_PACKAGE_SHOW_URL = "https://catalogue.data.gov.bc.ca/api/3/action/package_show"
 TIMEOUT = 60

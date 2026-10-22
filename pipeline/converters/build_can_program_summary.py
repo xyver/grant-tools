@@ -27,9 +27,10 @@ from pathlib import Path
 
 import duckdb
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-INPUT_FILE = PROJECT_ROOT / "data" / "countries" / "CAN" / "grants_contributions" / "CAN.parquet"
-OUTPUT_FILE = PROJECT_ROOT / "data" / "countries" / "CAN" / "grants_contributions" / "program_summary.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+INPUT_FILE = DATA_ROOT / "countries" / "CAN" / "grants_contributions" / "CAN.parquet"
+OUTPUT_FILE = DATA_ROOT / "countries" / "CAN" / "grants_contributions" / "program_summary.parquet"
 
 N_SAMPLE_DESCRIPTIONS = 3
 

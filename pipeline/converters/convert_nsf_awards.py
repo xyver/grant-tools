@@ -15,9 +15,10 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-INPUT_FILE = PROJECT_ROOT / "data" / "Raw data" / "nsf_awards" / "nsf_awards.csv"
-OUTPUT_FILE = PROJECT_ROOT / "data" / "countries" / "USA" / "nsf_awards" / "USA.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+INPUT_FILE = RAW_ROOT / "nsf_awards" / "nsf_awards.csv"
+OUTPUT_FILE = DATA_ROOT / "countries" / "USA" / "nsf_awards" / "USA.parquet"
 
 
 def main():

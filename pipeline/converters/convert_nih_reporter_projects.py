@@ -20,9 +20,10 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-INPUT_FILE = PROJECT_ROOT / "data" / "Raw data" / "nih_reporter_projects" / "nih_reporter_projects.csv"
-OUTPUT_FILE = PROJECT_ROOT / "data" / "countries" / "USA" / "nih_reporter_projects" / "USA.parquet"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+INPUT_FILE = RAW_ROOT / "nih_reporter_projects" / "nih_reporter_projects.csv"
+OUTPUT_FILE = DATA_ROOT / "countries" / "USA" / "nih_reporter_projects" / "USA.parquet"
 
 
 def main():

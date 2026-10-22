@@ -21,9 +21,10 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "data" / "Raw data" / "california_grants_portal"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "countries" / "USA" / "california_grants_portal"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DIR = RAW_ROOT / "california_grants_portal"
+OUTPUT_DIR = DATA_ROOT / "countries" / "USA" / "california_grants_portal"
 OPPORTUNITIES_FILE = OUTPUT_DIR / "opportunities.parquet"
 AWARDS_FILE = OUTPUT_DIR / "awards.parquet"
 

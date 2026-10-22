@@ -25,8 +25,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rate_limited_fetcher import RateLimitedFetcher
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-OUTPUT_DIR = PROJECT_ROOT / "data" / "Raw data" / "nsf_awards"
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+OUTPUT_DIR = RAW_ROOT / "nsf_awards"
 OUTPUT_CSV = OUTPUT_DIR / "nsf_awards.csv"
 CHECKPOINT_FILE = OUTPUT_DIR / "progress.json"
 STATS_PATH = OUTPUT_DIR / "fetch_stats.json"

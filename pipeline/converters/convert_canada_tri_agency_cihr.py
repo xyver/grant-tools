@@ -48,9 +48,10 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-RAW_DIR = PROJECT_ROOT / "data" / "Raw data" / "canada_tri_agency" / "cihr"
-OUTPUT_DIR = PROJECT_ROOT / "data" / "countries" / "CAN" / "tri_agency_cihr"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+RAW_DIR = RAW_ROOT / "canada_tri_agency" / "cihr"
+OUTPUT_DIR = DATA_ROOT / "countries" / "CAN" / "tri_agency_cihr"
 OUTPUT_FILE = OUTPUT_DIR / "CAN.parquet"
 
 SHEET_NAME = "G&A_S&B"
