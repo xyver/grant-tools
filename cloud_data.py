@@ -222,7 +222,7 @@ def exists(path: Path) -> bool:
 # against the regression suite).
 # ---------------------------------------------------------------------------
 
-def _pushdown_uri(path: Path) -> str:
+def pushdown_uri(path: Path) -> str:
     """Resolve the DuckDB URI for a data file from data_mode() alone.
 
     The same object-store key serves the boto3 reads above and the pushdown
@@ -251,7 +251,7 @@ def query_prior_awards_by_name(path: Path, org_name: str) -> pd.DataFrame:
     Equivalent to the old `recipient_name.str.contains(re.escape(org_name),
     case=False)`, but pushed into DuckDB. Caller must still guard empty names.
     """
-    uri = _pushdown_uri(path)
+    uri = pushdown_uri(path)
     sql = (
         "SELECT recipient_name, cfda_numbers_and_titles, total_obligated_amount, "
         "award_base_action_date "
@@ -268,7 +268,7 @@ def query_country_precedent(path: Path, cfda_code: str, country_code: str) -> pd
     cfda_code)) & (place_of_performance_country_code == country_code)`.
     cfda match is case-sensitive (LIKE) to preserve prior behavior.
     """
-    uri = _pushdown_uri(path)
+    uri = pushdown_uri(path)
     sql = (
         "SELECT cfda_numbers_and_titles, place_of_performance_country_code, "
         "total_obligated_amount, recipient_business_type_description, "
@@ -288,7 +288,7 @@ def query_precedent_abstracts(
     Equivalent to `df[df[text_col].notna() & (df[text_col].str.len() > 0)]`
     followed by an optional case-insensitive `keyword_col.str.contains(keyword)`.
     """
-    uri = _pushdown_uri(path)
+    uri = pushdown_uri(path)
     tcol = quote_ident(text_col)
     select_cols = ", ".join(quote_ident(c) for c in (text_col, keyword_col, title_col))
     sql = (

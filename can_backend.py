@@ -125,6 +125,96 @@ def _load_program_summary_cached():
     return cloud_data.read_parquet(PROGRAM_SUMMARY_PARQUET)
 
 
+# The three research councils' own award records (pipeline converters
+# convert_canada_tri_agency_*). Rows are one fiscal year of an award, so a
+# multi-year grant appears once per year: awards are counted by distinct id
+# and amounts summed across years.
+TRI_AGENCY_TABLES = {
+    "nserc-crsng": {
+        "source": "NSERC awards",
+        "path": DATA_ROOT / "countries" / "CAN" / "tri_agency_nserc" / "CAN.parquet",
+        "name": "program_name_en", "id": "application_id", "amount": "award_amount", "year": "fiscal_year",
+    },
+    "sshrc-crsh": {
+        "source": "SSHRC awards",
+        "path": DATA_ROOT / "countries" / "CAN" / "tri_agency_sshrc" / "CAN.parquet",
+        "name": "program_name_en", "id": "record_key", "amount": "award_amount", "year": "fiscal_year",
+    },
+    "cihr-irsc": {
+        "source": "CIHR investments",
+        "path": DATA_ROOT / "countries" / "CAN" / "tri_agency_cihr" / "CAN.parquet",
+        "name": "ProgramNameEN_NomProgrammeAN", "id": "FundingReferenceNumber_NumeroReferenceFinancement",
+        "amount": "AmountPaidFY_MontantPayeAF", "year": "FiscalYear_AnneeFinanciere",
+    },
+}
+
+
+@functools.lru_cache(maxsize=3)
+def _tri_agency_summary(owner_org):
+    """Per-program totals for one council, or None when its table is absent.
+
+    Aggregated in DuckDB so the 30-year tables are never loaded whole."""
+    spec = TRI_AGENCY_TABLES.get(owner_org)
+    if spec is None or not cloud_data.exists(spec["path"]):
+        return None
+    q = cloud_data.quote_ident
+    awards = f"count(DISTINCT {q(spec['id'])})" if spec.get("id") else "count(*)"
+    sql = (
+        f"SELECT {q(spec['name'])} AS program_name, {awards} AS award_count, "
+        f"sum(TRY_CAST({q(spec['amount'])} AS DOUBLE)) AS total_amount, "
+        f"min(CAST({q(spec['year'])} AS VARCHAR)) AS first_year, max(CAST({q(spec['year'])} AS VARCHAR)) AS last_year "
+        f"FROM read_parquet(?) WHERE {q(spec['name'])} IS NOT NULL GROUP BY 1"
+    )
+    return cloud_data.run_df(sql, [cloud_data.pushdown_uri(spec["path"])])
+
+
+def _tri_agency_precedent(row):
+    """Precedent from the council's own award record, or None to fall back.
+
+    A catalog row's precedent_name, when set, names the council's program
+    exactly; it exists because name containment over-matches (Discovery
+    Grants individual would pull in its supplements) or cannot match at all
+    (the Alliance streams are recorded only as "Alliance Grants")."""
+    summary = _tri_agency_summary(row["owner_org"])
+    if summary is None or summary.empty:
+        return None
+    precedent_name = str(row.get("precedent_name") or "").strip()
+    if precedent_name.lower() == "nan":
+        precedent_name = ""
+    names = summary["program_name"].astype(str).apply(_normalize_program_name)
+    if precedent_name:
+        exact = _normalize_program_name(precedent_name)
+        matched = summary[names == exact]
+    else:
+        target = _normalize_program_name(row["program_name"])
+        matched = summary[names.apply(lambda n: bool(n) and (n in target or target in n))]
+    if matched.empty:
+        return None
+    awards = int(matched["award_count"].sum())
+    total = float(matched["total_amount"].sum())
+    spec = TRI_AGENCY_TABLES[row["owner_org"]]
+    return {
+        "found": True,
+        "program_id": row["program_id"],
+        "program_name": row["program_name"],
+        "owner_org": row["owner_org"],
+        "source": spec["source"],
+        "matched_variant_count": len(matched),
+        "matched_variant_names": matched["program_name"].tolist(),
+        "award_count": awards,
+        "total_agreement_value": total,
+        "average_award_value": total / awards if awards else None,
+        "years_covered": f"{matched['first_year'].min()} to {matched['last_year'].max()}",
+        "precedent_scope_note": (
+            f"Matched as the council's '{precedent_name}' program; if that program has several "
+            "streams, these figures cover all of them." if precedent_name and
+            _normalize_program_name(precedent_name) != _normalize_program_name(row["program_name"]) else None
+        ),
+        "limitation": "These are descriptive statistics about past award recipients, not a "
+                      "prediction of whether any specific application will be funded.",
+    }
+
+
 @functools.lru_cache(maxsize=1)
 def _load_bc_awards_cached():
     if not cloud_data.exists(BC_AWARDS_PARQUET):
@@ -418,6 +508,18 @@ def get_can_precedent(program_id):
         return {"found": False, "note": f"No program with program_id '{program_id}' in canada_grant_funding_programs.csv."}
 
     row = match.iloc[0]
+    # A research council's own award record is fuller than its rows in the
+    # federal disclosure (which starts later and splits program names).
+    council = _tri_agency_precedent(row)
+    if council is not None:
+        return council
+    if not cloud_data.exists(PROGRAM_SUMMARY_PARQUET):
+        return {
+            "found": False,
+            "program_id": program_id,
+            "note": "The Canada data bundle is not installed under GRANT_DATA_ROOT, so past-award "
+                    "precedent is unavailable. Download it from the Grant Tools page.",
+        }
     summary = _load_program_summary_cached()
     same_owner = summary[summary["owner_org"] == row["owner_org"]].copy()
     if same_owner.empty:
