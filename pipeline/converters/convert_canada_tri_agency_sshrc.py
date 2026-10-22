@@ -48,7 +48,8 @@ ROLE_CANDIDATES = [
     ("fiscal_year", ["fiscalyearexercicefinancier", "fiscalyear"]),
     ("competition_year", ["competitionyear"]),
     ("award_amount", ["awardamount", "amountmontant"]),
-    ("program_name_en", ["programnameen"]),
+    # "ProgramNaneEN" is an upstream typo (2014); from 2016 the column is just "Program".
+    ("program_name_en", ["programnameen", "programnaneen", "program"]),
     ("title", ["titletitre", "title"]),
     ("keywords", ["keywordsmotscles", "keywords"]),
     ("discipline_en", ["sshrcdisciplineen", "disciplineen"]),
@@ -141,11 +142,14 @@ def build_loc_id(province_en: pd.Series) -> pd.Series:
 
 
 def transform(df: pd.DataFrame) -> pd.DataFrame:
+    # The 2017-18 file ends in thousands of empty CSV lines; they carry no key.
+    blank = df["record_key"].isna() & df["pi_name"].isna() & df["award_amount"].isna()
+    df = df.loc[~blank].copy()
     if "award_amount" in df.columns:
-        df["award_amount"] = pd.to_numeric(
-            df["award_amount"].str.strip() if df["award_amount"].dtype == object else df["award_amount"],
-            errors="coerce",
-        )
+        # 2015-2020 files write amounts as " $302,000.00 ". Cast to string
+        # first: text may arrive as object or as pandas' string dtype.
+        cleaned = df["award_amount"].astype("string").str.replace(r"[\s$,]", "", regex=True)
+        df["award_amount"] = pd.to_numeric(cleaned, errors="coerce")
     df["loc_id"] = build_loc_id(df["province_en"])
     return df
 
