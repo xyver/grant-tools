@@ -224,3 +224,5 @@ upstream source records retain their respective source terms; see each bundle's
   and collectors
 - [docs/grant_source_matrix.md](docs/grant_source_matrix.md) - source
   inventory by evidence layer
+- [docs/future_data_import.md](docs/future_data_import.md) - candidate data
+  sources not yet imported, and their status
