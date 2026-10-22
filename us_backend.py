@@ -47,6 +47,7 @@ Every score must carry that caveat when displayed. Do not add a "success
 probability" field without re-reading grant_readiness_score.md's "core
 honesty constraint" section first.
 """
+import html
 import functools
 import re
 from pathlib import Path
@@ -869,10 +870,10 @@ def program_cfda_code(program_id):
     match = df[df["program_id"] == program_id]
     if match.empty:
         return None
-    cfda_value = str(match.iloc[0]["cfda_number"] or "").strip()
+    cfda_value = _clean_str(match.iloc[0]["cfda_number"])
     if not cfda_value:
         return None
-    return cfda_value.split("|")[0].strip()
+    return cfda_value.split("|")[0].strip() or None
 
 
 def get_program_precedent(program_id, org_type=None):
@@ -886,12 +887,22 @@ def get_program_precedent(program_id, org_type=None):
 
 
 def check_program_opportunity(program_id):
-    """Shared backend interface (live_opportunity_check): open-opportunity
-    status for one catalog program. None when it has no CFDA code."""
+    """Shared backend interface (live_opportunity_check): is this catalog
+    program open right now? Asks Grants.gov live first; only if that call
+    fails does it fall back to the bundle's snapshot, and says so. None when
+    the program has no CFDA code."""
     cfda_code = program_cfda_code(program_id)
     if not cfda_code:
         return None
-    return check_open_opportunity(cfda_code, live_fallback=False)
+    live = check_open_opportunity_live(cfda_code)
+    if live is not None:
+        return live
+    snapshot = check_open_opportunity(cfda_code, live_fallback=False)
+    snapshot["note"] = (
+        "The live Grants.gov check failed, so this is the bundle's snapshot, which can be "
+        "months old. " + str(snapshot.get("note") or "")
+    ).strip()
+    return snapshot
 
 
 def check_prior_federal_awards(org_name):
@@ -1124,20 +1135,31 @@ def check_open_opportunity(cfda_code, live_fallback=True):
                     f"false negative, not a confirmed absence.",
         }
 
+    live = check_open_opportunity_live(cfda_code)
+    if live is None:
+        return {
+            "checked": True,
+            "checked_live": False,
+            "is_currently_open": False,
+            "note": "Snapshot had no match and the live Grants.gov call failed - "
+                    "treat as unknown, not confirmed closed.",
+        }
+    return live
+
+
+def check_open_opportunity_live(cfda_code):
+    """Ask Grants.gov right now whether this CFDA has a posted opportunity.
+
+    Returns the same shape as check_open_opportunity, with checked_live=True,
+    or None when the call fails (the caller decides what to fall back to)."""
     try:
         response = RateLimitedFetcher(min_interval=1.0).post(
             "https://api.grants.gov/v1/api/search2",
             json={"cfda": cfda_code, "rows": 5, "oppStatuses": "posted"},
         )
         hits = response.json().get("data", {}).get("oppHits", [])
-    except Exception as e:
-        return {
-            "checked": True,
-            "checked_live": False,
-            "is_currently_open": False,
-            "note": f"Snapshot had no match and the live fallback call failed ({e}) - "
-                    f"treat as unknown, not confirmed closed.",
-        }
+    except Exception:
+        return None
 
     if not hits:
         return {
@@ -1153,7 +1175,8 @@ def check_open_opportunity(cfda_code, live_fallback=True):
         "is_currently_open": True,
         "opportunities": [
             {
-                "title": h.get("title"), "agency": h.get("agency"), "close_date": _clean_close_date(h.get("closeDate")),
+                "title": html.unescape(str(h.get("title") or "")), "agency": h.get("agency"),
+                "close_date": _clean_close_date(h.get("closeDate")),
                 "opportunity_number": h.get("number"),
                 "funding_mechanism": _classify_funding_mechanism(h.get("title")),
             }
@@ -1188,7 +1211,7 @@ def find_open_opportunities_live(keyword, max_results=10):
         "showing": len(hits),
         "opportunities": [
             {
-                "title": h.get("title"),
+                "title": html.unescape(str(h.get("title") or "")),
                 "agency": h.get("agency"),
                 "opportunity_number": h.get("number"),
                 "open_date": h.get("openDate"),
