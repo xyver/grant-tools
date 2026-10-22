@@ -63,15 +63,15 @@ def prewarm() -> None:
 PROVIDER_SLUG = "grants"
 MCP_PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {
-    "name": "com.daedalmap/grants-private",
-    "title": "DaedalMap Grants Private MCP",
+    "name": "grant-tools",
+    "title": "Grant Tools MCP",
     "version": "0.1.0",
 }
 UNAUTHORIZED_MESSAGE = (
     "Access token required. Please provide token."
 )
 INSTRUCTIONS = (
-    "Private phase-aware grant MCP. This server supports only pre-submission "
+    "Phase-aware grant MCP. This server supports only pre-submission "
     "grant workflow phases: prospect research, proposal development, and "
     "submission support. Start with grant_intake_or_update_project using "
     "project_input plus optional project_label, country_code, phase_hint, and "
@@ -112,8 +112,8 @@ QUICKSTART_EXAMPLE = {
         },
     },
 }
-RESOURCE_QUICKSTART_URI = "daedalmap://grants/quickstart"
-RESOURCE_METHODS_URI = "daedalmap://grants/methodology"
+RESOURCE_QUICKSTART_URI = "grant-tools://quickstart"
+RESOURCE_METHODS_URI = "grant-tools://methodology"
 
 
 def _grant_tool_definitions() -> list[dict[str, Any]]:
@@ -577,12 +577,12 @@ def info_payload() -> dict[str, Any]:
         "transport": "streamable-http",
         "auth": "bearer",
         "summary": (
-            "Private phase-aware grant workflow MCP for pre-submission grant work. "
+            "Phase-aware grant workflow MCP for pre-submission grant work. "
             "Use it to intake a project, analyze fit and blockers, shortlist target "
             "programs, and then move into memo, budget, and submission-support steps."
         ),
         "howToStart": [
-            "Authenticate with a bearer token.",
+            "Send a bearer token only if the server has GRANT_MCP_ACCESS_TOKENS set.",
             "Call grant_intake_or_update_project with project_input.",
             "Use the returned session_id in grant_analyze_current_phase.",
             "Call prompts/list for starter instructions and example flows.",
@@ -595,7 +595,6 @@ def info_payload() -> dict[str, Any]:
         "tools": [tool["name"] for tool in _grant_tool_definitions()],
         "prompts": [prompt["name"] for prompt in _grant_prompt_definitions()],
         "resources": [resource["uri"] for resource in _grant_resource_definitions()],
-        "private": True,
     }
 
 
