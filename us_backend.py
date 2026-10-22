@@ -1082,57 +1082,51 @@ def check_open_opportunity(cfda_code, live_fallback=True):
     snapshot for cheap cross-reference/aggregate use):
 
     1. First checks the pre-pulled grants_gov_open_opportunities/latest.csv
-       snapshot (Pattern B - cheap, no network call, but only covers the
-       8 disaster/resilience/green-infra keywords it was pulled with).
-    2. If the snapshot shows no match and live_fallback=True, falls back to
-       a live, exact-CFDA query against Grants.gov (Pattern A -
-       find_open_opportunities_live's sibling, using the API's dedicated
-       `cfda` filter rather than a keyword guess) - this is the
-       authoritative check, not a guess, and catches programs outside the
-       snapshot's keyword set.
+       snapshot (Pattern B - cheap, no network call). Only posted rows count
+       as open; forecasted rows are reported as upcoming. Older bundles hold
+       a keyword sample only, so a miss there is not proof of absence.
+    2. If the snapshot shows nothing posted and live_fallback=True, falls
+       back to a live, exact-CFDA query against Grants.gov (Pattern A, the
+       API's dedicated `cfda` filter rather than a keyword guess) - this is
+       the authoritative check.
 
     Set live_fallback=False to stay snapshot-only (e.g. for bulk scoring
     runs where many programs are checked and you don't want N network
     calls) - the result will say checked_live=False so the caller knows
-    "not found" might just mean "not in the narrow snapshot."
+    "not found" might just mean "not in the snapshot."
     """
     df = _load_open_opportunities_cached()
     snapshot_matches = (
         df[df["cfda_numbers"].str.contains(re.escape(cfda_code), na=False)]
         if df is not None else pd.DataFrame()
     )
-
-    if not snapshot_matches.empty:
-        opportunities = []
-        for r in snapshot_matches.to_dict("records"):
-            close_date = _clean_close_date(r.get("close_date"))
-            # A stale snapshot entry whose close date has passed must not read
-            # as "currently open" - drop it (unknown/future dates are kept).
-            if _close_date_is_past(close_date):
-                continue
-            opportunities.append({
-                "title": r["title"], "agency": r["agency"], "close_date": close_date,
-                "opportunity_number": r["opportunity_number"],
-                "funding_mechanism": _classify_funding_mechanism(r["title"]),
-            })
-        if opportunities:
-            return {
-                "checked": True,
-                "checked_live": False,
-                "is_currently_open": True,
-                "opportunities": opportunities,
-            }
-        # All snapshot matches were past-dated: fall through to the live
-        # fallback / not-open handling rather than reporting a dead NOFO as open.
+    posted, forecasted = [], []
+    for r in snapshot_matches.to_dict("records"):
+        close_date = _clean_close_date(r.get("close_date"))
+        # A stale snapshot entry whose close date has passed must not read
+        # as "currently open" - drop it (unknown/future dates are kept).
+        if _close_date_is_past(close_date):
+            continue
+        entry = _opportunity_entry(r.get("title"), r.get("agency"), close_date, r.get("opportunity_number"))
+        status = str(r.get("opp_status") or "posted").strip().lower()
+        (forecasted if status == "forecasted" else posted).append(entry)
+    if posted:
+        return {
+            "checked": True,
+            "checked_live": False,
+            "is_currently_open": True,
+            "opportunities": posted,
+            "forecasted_opportunities": forecasted,
+        }
 
     if not live_fallback:
         return {
             "checked": True,
             "checked_live": False,
             "is_currently_open": False,
-            "note": f"No open NOFO found for CFDA {cfda_code} in the static snapshot "
-                    f"(8-keyword coverage only). live_fallback was off - this could be a "
-                    f"false negative, not a confirmed absence.",
+            "forecasted_opportunities": forecasted,
+            "note": f"No posted NOFO for CFDA {cfda_code} in the bundle's snapshot. live_fallback "
+                    f"was off - this could be a false negative, not a confirmed absence.",
         }
 
     live = check_open_opportunity_live(cfda_code)
@@ -1141,47 +1135,58 @@ def check_open_opportunity(cfda_code, live_fallback=True):
             "checked": True,
             "checked_live": False,
             "is_currently_open": False,
-            "note": "Snapshot had no match and the live Grants.gov call failed - "
+            "forecasted_opportunities": forecasted,
+            "note": "Snapshot had no posted match and the live Grants.gov call failed - "
                     "treat as unknown, not confirmed closed.",
         }
     return live
 
 
+def _opportunity_entry(title, agency, close_date, number):
+    title = html.unescape(str(title or ""))
+    return {
+        "title": title, "agency": agency, "close_date": close_date,
+        "opportunity_number": number,
+        "funding_mechanism": _classify_funding_mechanism(title),
+    }
+
+
 def check_open_opportunity_live(cfda_code):
-    """Ask Grants.gov right now whether this CFDA has a posted opportunity.
+    """Ask Grants.gov right now whether this CFDA has a posted opportunity,
+    and which are forecasted.
 
     Returns the same shape as check_open_opportunity, with checked_live=True,
     or None when the call fails (the caller decides what to fall back to)."""
     try:
         response = RateLimitedFetcher(min_interval=1.0).post(
             "https://api.grants.gov/v1/api/search2",
-            json={"cfda": cfda_code, "rows": 5, "oppStatuses": "posted"},
+            json={"cfda": cfda_code, "rows": 10, "oppStatuses": "posted|forecasted"},
         )
         hits = response.json().get("data", {}).get("oppHits", [])
     except Exception:
         return None
 
-    if not hits:
+    posted, forecasted = [], []
+    for h in hits:
+        entry = _opportunity_entry(h.get("title"), h.get("agency"), _clean_close_date(h.get("closeDate")), h.get("number"))
+        (forecasted if str(h.get("oppStatus") or "").lower() == "forecasted" else posted).append(entry)
+
+    if not posted:
         return {
             "checked": True,
             "checked_live": True,
             "is_currently_open": False,
-            "note": f"Confirmed live: no open NOFO for CFDA {cfda_code} right now.",
+            "forecasted_opportunities": forecasted,
+            "note": f"Confirmed live: no open NOFO for CFDA {cfda_code} right now"
+                    + (f"; {len(forecasted)} forecasted." if forecasted else "."),
         }
 
     return {
         "checked": True,
         "checked_live": True,
         "is_currently_open": True,
-        "opportunities": [
-            {
-                "title": html.unescape(str(h.get("title") or "")), "agency": h.get("agency"),
-                "close_date": _clean_close_date(h.get("closeDate")),
-                "opportunity_number": h.get("number"),
-                "funding_mechanism": _classify_funding_mechanism(h.get("title")),
-            }
-            for h in hits
-        ],
+        "opportunities": posted,
+        "forecasted_opportunities": forecasted,
     }
 
 

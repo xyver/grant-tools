@@ -16,9 +16,15 @@ published policy found across the no-key sources researched (NIH RePORTER
 publishes that exact limit), applied as a blanket default since none of
 these endpoints publish anything looser.
 
+By default it takes every posted and forecasted opportunity (about 870 and 600
+in Oct 2026, so roughly 15 requests), not a keyword sample: the shortlist's
+open status reads this file, so a program missing from it would read as
+"not open". Forecasted rows are announced but not yet accepting applications.
+
 Usage:
     python download_grants_gov_open_opportunities.py
     python download_grants_gov_open_opportunities.py --keywords "resilience,hazard mitigation"
+    python download_grants_gov_open_opportunities.py --statuses posted
 
 Output:
     data/countries/USA/grants_gov_open_opportunities/snapshot_{date}.csv
@@ -33,16 +39,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rate_limited_fetcher import RateLimitedFetcher
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-OUTPUT_DIR = PROJECT_ROOT / "data" / "countries" / "USA" / "grants_gov_open_opportunities"
+from runtime_paths import DATA_ROOT, RAW_ROOT  # noqa: E402
+OUTPUT_DIR = DATA_ROOT / "countries" / "USA" / "grants_gov_open_opportunities"
 STATS_PATH = OUTPUT_DIR / "fetch_stats.json"
 
 API_URL = "https://api.grants.gov/v1/api/search2"
 ROWS_PER_PAGE = 100
 
-# Keywords covering the disaster recovery / community resilience / green
-# infrastructure / prevention space researched in USA grant research.md.
-DEFAULT_KEYWORDS = [
+# The earlier default keyword set (disaster recovery / resilience / green
+# infrastructure), kept as an example for --keywords.
+EXAMPLE_KEYWORDS = [
     "resilience",
     "hazard mitigation",
     "disaster recovery",
@@ -54,26 +60,26 @@ DEFAULT_KEYWORDS = [
 ]
 
 
-def search_opportunities(fetcher, keyword, start_record=0):
-    """One page of search2 results for a keyword. Pacing/retries handled by fetcher."""
+def search_opportunities(fetcher, keyword, start_record=0, statuses="posted"):
+    """One page of search2 results for a keyword ("" for all). Pacing/retries handled by fetcher."""
     body = {
         "keyword": keyword,
         "rows": ROWS_PER_PAGE,
         "startRecordNum": start_record,
-        "oppStatuses": "posted",
+        "oppStatuses": statuses,
     }
     response = fetcher.post(API_URL, json=body)
     return response.json()
 
 
-def fetch_all_for_keyword(fetcher, keyword):
+def fetch_all_for_keyword(fetcher, keyword, statuses="posted"):
     """Page through all results for one keyword, respecting the request interval."""
-    print(f"Searching: '{keyword}'")
+    print(f"Searching: '{keyword or '(all)'}' [{statuses}]")
     all_hits = []
     start_record = 0
 
     while True:
-        data = search_opportunities(fetcher, keyword, start_record)
+        data = search_opportunities(fetcher, keyword, start_record, statuses)
 
         payload = data.get("data", {})
         hits = payload.get("oppHits", [])
@@ -93,11 +99,15 @@ def main():
     parser = argparse.ArgumentParser(description="Download currently-open Grants.gov opportunities")
     parser.add_argument(
         "--keywords", type=str, default=None,
-        help="Comma-separated keywords (default: resilience/disaster/recovery set)"
+        help="Comma-separated keywords to limit the pull (default: every opportunity)"
+    )
+    parser.add_argument(
+        "--statuses", type=str, default="posted|forecasted",
+        help="Grants.gov oppStatuses, '|' separated (default: posted|forecasted)"
     )
     args = parser.parse_args()
 
-    keywords = [k.strip() for k in args.keywords.split(",")] if args.keywords else DEFAULT_KEYWORDS
+    keywords = [k.strip() for k in args.keywords.split(",")] if args.keywords else [""]
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Output directory: {OUTPUT_DIR}")
@@ -108,7 +118,7 @@ def main():
     seen_ids = set()
     rows = []
     for keyword in keywords:
-        hits = fetch_all_for_keyword(fetcher, keyword)
+        hits = fetch_all_for_keyword(fetcher, keyword, args.statuses)
         for hit in hits:
             if hit["id"] in seen_ids:
                 continue
