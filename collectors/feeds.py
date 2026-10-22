@@ -34,7 +34,9 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 "
     "GrantTools/1.0 (announcement collector)"
 )
-MAX_RECENT_ITEMS = 500
+# Recent items kept per feed. Per feed, not overall: a collector reading many
+# feeds would otherwise let its busiest feeds push the others out entirely.
+MAX_RECENT_ITEMS_PER_FEED = 100
 # Ids remembered for new-item detection. Larger than the recent window because
 # one run can fetch more items than it keeps (Canada fetches about 700).
 MAX_SEEN_IDS = 10000
@@ -143,6 +145,19 @@ def fetch_feed(collector: Collector, feed_key: str, url: str) -> List[Dict[str, 
     return collector.parse(ET.fromstring(raw), feed_key)
 
 
+def _recent_window(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Newest-first items, keeping up to MAX_RECENT_ITEMS_PER_FEED from each feed."""
+    kept: List[Dict[str, Any]] = []
+    per_feed: Dict[str, int] = {}
+    for item in items:
+        feed = str(item.get("source_feed") or "")
+        if per_feed.get(feed, 0) >= MAX_RECENT_ITEMS_PER_FEED:
+            continue
+        per_feed[feed] = per_feed.get(feed, 0) + 1
+        kept.append(item)
+    return kept
+
+
 def _read_snapshot(path: Path) -> Dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -205,7 +220,7 @@ def collect(collector: Collector, state_dir: Path) -> Dict[str, Any]:
             "feeds": feed_counts,
             "fetch_errors": fetch_errors,
             "new_items_this_poll": new_items,
-            "recent_items": (new_items + previous_recent)[:MAX_RECENT_ITEMS],
+            "recent_items": _recent_window(new_items + previous_recent),
             "observed_history_file": observed_file,
         },
     }
