@@ -673,17 +673,32 @@ class UnifiedCountryWorkflowTests(unittest.TestCase):
         result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
         self.assertEqual(result["outcome"], gm.OUTCOME_OK)
         ids = [m["program_id"] for m in result["top_matches"]]
-        self.assertIn("can_psc_community_resilience_fund", ids)
+        self.assertIn("can_ps_pdcp", ids)
         by_id = {p["program_id"]: p for p in result["precedent_summary"]}
         self.assertEqual(set(by_id), set(ids))
-        self.assertTrue(by_id["can_psc_community_resilience_fund"]["found"])
-        self.assertGreater(by_id["can_psc_community_resilience_fund"]["award_count"], 0)
+        self.assertTrue(by_id["can_ps_pdcp"]["found"])
+        self.assertGreater(by_id["can_ps_pdcp"]["award_count"], 0)
+
+    def test_canada_closed_programs_move_to_historical_precedent(self):
+        intake = self._bc_session()
+        result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
+        shortlist = {m["program_id"] for m in result["top_matches"]}
+        historical = {h["program_id"]: h for h in result["historical_precedent"]}
+        self.assertIn("can_ps_red_cross_flood_fire", historical)
+        self.assertNotIn("can_ps_red_cross_flood_fire", shortlist)
+        self.assertTrue(historical["can_ps_red_cross_flood_fire"]["why_not_a_target"])
+        self.assertTrue(all(m["lifecycle_status"] not in gm.HISTORICAL_LIFECYCLE_STATUSES for m in result["top_matches"]))
+
+    def test_canada_catalog_links_are_program_pages(self):
+        import can_backend
+        generic = can_backend.load_programs()["source_url"] == "https://search.open.canada.ca/grants/"
+        self.assertEqual(int(generic.sum()), 0)
 
     def test_canada_phase_two_and_three_use_the_shared_capability_paths(self):
         intake = self._bc_session()
         sid = intake["session_id"]
         gm.grant_analyze_current_phase(session_id=sid)
-        gm.grant_select_target_program(session_id=sid, program_id="can_psc_community_resilience_fund")
+        gm.grant_select_target_program(session_id=sid, program_id="can_ps_pdcp")
 
         precedent = gm.grant_analyze_current_phase(
             session_id=sid, analysis_request="What precedent evidence should I cite before writing?"
@@ -728,6 +743,41 @@ class UnifiedCountryWorkflowTests(unittest.TestCase):
         self.assertTrue(live[0]["found"])
         self.assertIn("read_canada_live_announcements", result["selected_workflow_steps"])
 
+    def test_live_leads_must_match_the_project(self):
+        intake = self._bc_session()
+        profile = gm._SESSIONS[intake["session_id"]]["project_profile"]
+        items = [
+            {"id": "1", "title": "Funding to support victims of gender-based violence in rural areas"},
+            {"id": "2", "title": "Government of Canada invests in wildfire resilience in Northern Ontario"},
+            {"id": "3", "title": "New funding for FireSmart wildfire mitigation across Canada"},
+            {"id": "4", "title": "British Columbia communities receive wildfire preparedness funding"},
+            {"id": "5", "title": "Minister meets counterpart on trade"},
+        ]
+        leads, funding_count = gm._relevant_live_items(items, profile)
+        self.assertEqual(funding_count, 4)
+        self.assertEqual([lead["id"] for lead in leads], ["4", "3"])  # own province first; Ontario dropped
+        self.assertTrue(leads[0]["mentions_project_region"])
+
+    def test_no_relevant_leads_is_explained(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as state_dir:
+            collector_dir = Path(state_dir) / "canada_grant_announcements"
+            collector_dir.mkdir()
+            snapshot = {"payload_summary": {"recent_items": [
+                {"id": "1", "title": "Funding for youth employment in Northern Ontario"},
+            ]}}
+            (collector_dir / "snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+            with mock.patch.object(gm, "STATE_DIR", Path(state_dir)):
+                intake = self._bc_session()
+                result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
+        live = next(e for e in result["regional_evidence"] if e.get("collector") == "canada_grant_announcements")
+        self.assertFalse(live["found"])
+        self.assertEqual(live["relevant_leads"], [])
+        self.assertIn("none matched", live["relevance_note"])
+
     def test_unresolved_place_text_is_explained_not_silent(self):
         from unittest import mock
         import geometry_client
@@ -745,6 +795,49 @@ class UnifiedCountryWorkflowTests(unittest.TestCase):
         self.assertEqual(intake["outcome"], gm.OUTCOME_CLARIFICATION)
         self.assertEqual({p["status"] for p in intake["unresolved_places"]}, {"ambiguous"})
         self.assertTrue(any("USA-OR-067" in note for note in intake["notes"]))
+
+
+class CollectorWindowTests(unittest.TestCase):
+    def test_recent_window_is_capped_per_feed(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
+        import feeds
+
+        items = [{"id": f"a{i}", "source_feed": "busy"} for i in range(feeds.MAX_RECENT_ITEMS_PER_FEED + 50)]
+        items += [{"id": f"b{i}", "source_feed": "quiet"} for i in range(10)]
+        window = feeds._recent_window(items)
+        self.assertEqual(sum(1 for i in window if i["source_feed"] == "busy"), feeds.MAX_RECENT_ITEMS_PER_FEED)
+        self.assertEqual(sum(1 for i in window if i["source_feed"] == "quiet"), 10)
+
+
+class LiveOpportunityCheckTests(unittest.TestCase):
+    def test_program_check_asks_grants_gov_live_first(self):
+        from unittest import mock
+        import us_backend
+
+        live = {"checked": True, "checked_live": True, "is_currently_open": False}
+        with mock.patch.object(us_backend, "program_cfda_code", return_value="97.047"), \
+                mock.patch.object(us_backend, "check_open_opportunity_live", return_value=live) as call:
+            result = us_backend.check_program_opportunity("fema_bric")
+        call.assert_called_once_with("97.047")
+        self.assertTrue(result["checked_live"])
+
+    def test_program_without_cfda_has_no_lookup_code(self):
+        import us_backend
+
+        # A blank CSV cell must not become the string "nan" sent to Grants.gov.
+        self.assertIsNone(us_backend.program_cfda_code("calfire_wildfire_prevention"))
+
+    def test_program_check_falls_back_to_snapshot_and_says_so(self):
+        from unittest import mock
+        import us_backend
+
+        snapshot = {"checked": True, "checked_live": False, "is_currently_open": False, "note": "snapshot"}
+        with mock.patch.object(us_backend, "program_cfda_code", return_value="97.047"), \
+                mock.patch.object(us_backend, "check_open_opportunity_live", return_value=None), \
+                mock.patch.object(us_backend, "check_open_opportunity", return_value=snapshot):
+            result = us_backend.check_program_opportunity("fema_bric")
+        self.assertFalse(result["checked_live"])
+        self.assertIn("live Grants.gov check failed", result["note"])
 
 
 class GeometryClientTests(unittest.TestCase):

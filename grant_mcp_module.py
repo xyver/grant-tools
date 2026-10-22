@@ -15,6 +15,7 @@ shape for every country.
 
 from __future__ import annotations
 
+import html
 import inspect
 import json
 import re
@@ -448,37 +449,124 @@ def _load_local_collector_snapshot(collector_name: str) -> dict[str, Any] | None
         return None
 
 
-def _grantish_live_items(items: list[dict[str, Any]], *, limit: int = 5) -> list[dict[str, Any]]:
-    terms = (
-        "applicant",
-        "application",
-        "applications",
-        "apply",
-        "due",
-        "funding",
-        "grant",
-        "grants",
-        "nosa",
-        "solicitation",
-    )
-    selected = []
-    for item in items:
-        text = " ".join(
-            str(item.get(key) or "")
-            for key in ("title", "raw_excerpt", "link")
-        ).lower()
-        if not any(term in text for term in terms):
+# Words that mark a feed item as funding news at all.
+FUNDING_LEAD_TERMS = (
+    "applicant", "application", "applications", "apply", "due", "funding", "fund", "grant",
+    "grants", "nosa", "solicitation", "call for proposals", "intake", "invest", "investment",
+    "assistance", "contribution", "award",
+)
+
+# Region names used to judge whether a lead is about the project's place.
+# Keys are the second segment of a loc_id (USA-XX, CAN-XX).
+REGION_NAMES = {
+    "CAN": {
+        "AB": ("alberta",), "BC": ("british columbia", "b.c."), "MB": ("manitoba",),
+        "NB": ("new brunswick",), "NL": ("newfoundland", "labrador"), "NS": ("nova scotia",),
+        "NT": ("northwest territories",), "NU": ("nunavut",), "ON": ("ontario",),
+        "PE": ("prince edward island", "p.e.i."), "QC": ("quebec",), "SK": ("saskatchewan",),
+        "YT": ("yukon",),
+    },
+    "USA": {
+        "AL": ("alabama",), "AK": ("alaska",), "AZ": ("arizona",), "AR": ("arkansas",),
+        "CA": ("california",), "CO": ("colorado",), "CT": ("connecticut",), "DE": ("delaware",),
+        "DC": ("district of columbia",), "FL": ("florida",), "GA": ("georgia",), "HI": ("hawaii",),
+        "ID": ("idaho",), "IL": ("illinois",), "IN": ("indiana",), "IA": ("iowa",), "KS": ("kansas",),
+        "KY": ("kentucky",), "LA": ("louisiana",), "ME": ("maine",), "MD": ("maryland",),
+        "MA": ("massachusetts",), "MI": ("michigan",), "MN": ("minnesota",), "MS": ("mississippi",),
+        "MO": ("missouri",), "MT": ("montana",), "NE": ("nebraska",), "NV": ("nevada",),
+        "NH": ("new hampshire",), "NJ": ("new jersey",), "NM": ("new mexico",), "NY": ("new york",),
+        "NC": ("north carolina",), "ND": ("north dakota",), "OH": ("ohio",), "OK": ("oklahoma",),
+        "OR": ("oregon",), "PA": ("pennsylvania",), "RI": ("rhode island",), "SC": ("south carolina",),
+        "SD": ("south dakota",), "TN": ("tennessee",), "TX": ("texas",), "UT": ("utah",),
+        "VT": ("vermont",), "VA": ("virginia",), "WA": ("washington state",), "WV": ("west virginia",),
+        "WI": ("wisconsin",), "WY": ("wyoming",), "PR": ("puerto rico",),
+    },
+}
+
+
+def _project_regions(profile: dict[str, dict[str, Any]]) -> tuple[str | None, set[str]]:
+    """(country iso3, region codes) of the project's places of performance and home."""
+    loc_ids = _project_area_loc_ids(profile) + [str(_field_value(profile, "recipient_loc_id") or "")]
+    country, regions = None, set()
+    for loc_id in loc_ids:
+        parts = loc_id.strip().upper().split("-")
+        if len(parts) >= 2 and parts[0] in REGION_NAMES and parts[1] in REGION_NAMES[parts[0]]:
+            country = country or parts[0]
+            regions.add(parts[1])
+    return country, regions
+
+
+# Sector words too broad to make a national news item relevant on their own.
+WEAK_LEAD_TOKENS = frozenset({
+    "resilience", "preparedness", "recovery", "mitigation", "climate", "adaptation", "research",
+    "software", "map", "mapping", "energy", "grid", "road", "roads", "mobility",
+})
+
+
+def _matched_tags(text: str, tags: list[str]) -> tuple[list[str], bool]:
+    """(tags whose words appear in text, whether any matched word is specific)."""
+    matched, strong = [], False
+    for tag in tags:
+        tokens = [token for token in SECTOR_TAG_TOKENS.get(tag, ()) if _mentions(text, token)]
+        if tokens:
+            matched.append(tag)
+            strong = strong or any(token not in WEAK_LEAD_TOKENS for token in tokens)
+    return sorted(matched), strong
+
+
+def _relevant_live_items(
+    items: list[dict[str, Any]], profile: dict[str, dict[str, Any]], *, limit: int = 5, scope: str = "national"
+) -> tuple[list[dict[str, Any]], int]:
+    """Live items that are funding news AND about this project.
+
+    An item must mention a funding word and one of the project's sector
+    tags' words. For a regional feed (already scoped to the project's
+    region) the words may be anywhere in the item. For a national feed they
+    must be in the title, and a title that matches only broad words
+    ("resilience", "preparedness") must also name the project's region.
+    An item that names only other provinces or states is dropped; one
+    naming the project's own region ranks first. Returns (leads, number of
+    funding items seen) so a caller can say "N funding items, none
+    relevant" rather than showing unrelated news."""
+    tags = list(_field_value(profile, "sector_tags") or [])
+    country, regions = _project_regions(profile)
+    own_names = [n for code in regions for n in REGION_NAMES.get(country or "", {}).get(code, ())]
+    other_names = [
+        n for code, names in REGION_NAMES.get(country or "", {}).items() if code not in regions for n in names
+    ]
+    funding_count = 0
+    scored = []
+    for position, item in enumerate(items):
+        text = " ".join(str(item.get(key) or "") for key in ("title", "raw_excerpt", "category")).lower()
+        if not any(_mentions(text, term) for term in FUNDING_LEAD_TERMS):
             continue
-        selected.append({
-            "title": item.get("title"),
+        funding_count += 1
+        names_own = any(name in text for name in own_names)
+        if not names_own and any(name in text for name in other_names):
+            continue
+        if scope == "regional":
+            matched, _ = _matched_tags(text, tags)
+            keep = bool(matched)
+        else:
+            matched, strong = _matched_tags(str(item.get("title") or "").lower(), tags)
+            keep = bool(matched) and (strong or names_own)
+        if not keep:
+            continue
+        scored.append((-(len(matched) + (2 if names_own else 0)), position, item, matched, names_own))
+    scored.sort(key=lambda row: (row[0], row[1]))
+    leads = [
+        {
+            "title": html.unescape(str(item.get("title") or "")),
             "link": item.get("link"),
             "published": item.get("published"),
             "source_feed": item.get("source_feed"),
             "id": item.get("id"),
-        })
-        if len(selected) >= limit:
-            break
-    return selected
+            "matched_sector_tags": matched,
+            "mentions_project_region": names_own,
+        }
+        for _, _, item, matched, names_own in scored[:limit]
+    ]
+    return leads, funding_count
 
 
 def _is_international_profile(profile: dict[str, dict[str, Any]]) -> bool:
@@ -497,6 +585,7 @@ LIVE_ANNOUNCEMENT_SOURCES = (
         "country": "US",
         "collector": "arc_grant_announcements",
         "run_key": "arc",
+        "scope": "regional",
         "source_name": "Appalachian Regional Commission news feed",
         "applies": lambda profile: _is_appalachia_profile(profile),
         "step": "read_arc_live_announcements",
@@ -504,8 +593,19 @@ LIVE_ANNOUNCEMENT_SOURCES = (
     },
     {
         "country": "US",
+        "collector": "california_grants_portal",
+        "run_key": "california",
+        "scope": "regional",
+        "source_name": "California Grants Portal feed",
+        "applies": lambda profile: _is_california_profile(profile),
+        "step": "read_california_live_grants",
+        "limitation": "California Grants Portal feed items are newly posted state grants; confirm deadlines on the portal.",
+    },
+    {
+        "country": "US",
         "collector": "state_dept_press_releases",
         "run_key": "state_dept",
+        "scope": "national",
         "source_name": "US State Department press releases",
         "applies": lambda profile: _is_international_profile(profile),
         "step": "read_state_dept_live_announcements",
@@ -515,6 +615,7 @@ LIVE_ANNOUNCEMENT_SOURCES = (
         "country": "CAN",
         "collector": "canada_grant_announcements",
         "run_key": "canada",
+        "scope": "national",
         "source_name": "Government of Canada funding and grant news",
         "applies": lambda profile: True,
         "step": "read_canada_live_announcements",
@@ -523,7 +624,7 @@ LIVE_ANNOUNCEMENT_SOURCES = (
 )
 
 
-def _live_announcement_evidence(source: dict[str, Any]) -> dict[str, Any]:
+def _live_announcement_evidence(source: dict[str, Any], profile: dict[str, dict[str, Any]]) -> dict[str, Any]:
     base = {
         "source_layer": "live_announcement",
         "source_name": source["source_name"],
@@ -541,13 +642,20 @@ def _live_announcement_evidence(source: dict[str, Any]) -> dict[str, Any]:
         }
     payload = snapshot.get("payload_summary") or {}
     recent_items = [item for item in payload.get("recent_items") or [] if isinstance(item, dict)]
-    leads = _grantish_live_items(recent_items, limit=5)
+    leads, funding_count = _relevant_live_items(recent_items, profile, limit=5, scope=source["scope"])
     return {
         **base,
         "found": bool(leads),
         "fetched_at": snapshot.get("fetched_at"),
         "upstream_issued_at": snapshot.get("upstream_issued_at"),
-        "recent_grantish_items": leads,
+        "items_in_snapshot": len(recent_items),
+        "funding_items_in_snapshot": funding_count,
+        "relevant_leads": leads,
+        "relevance_note": (
+            None if leads else
+            f"{funding_count} funding item(s) in this feed's recent window; none matched this "
+            "project's sectors and place."
+        ),
         "observed_history_note": (
             "This is a live source. Its persistent history begins when the local collector observes "
             "updates; it is not treated as complete historical award precedent."
@@ -634,7 +742,7 @@ def _collect_regional_and_live_evidence(
         if source["country"] != country_code or not source["applies"](profile):
             continue
         steps.append(source["step"])
-        evidence.append(_live_announcement_evidence(source))
+        evidence.append(_live_announcement_evidence(source, profile))
         limitations.append(source["limitation"])
     return evidence, steps, limitations
 
@@ -807,6 +915,43 @@ PHASE_1_PER_LOCATION_TOP_N = 25
 PHASE_1_MERGED_TOP_N = 10
 PHASE_1_MIN_TOP_N = 1
 PHASE_1_MAX_TOP_N = 10
+
+
+def _separate_historical(
+    ranked: list[dict[str, Any]], selected_steps: list[str], limitations: list[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split programs that are over out of the ranked list, for every country.
+
+    They are separated rather than dropped. They cannot be applied to, but
+    they are the best available evidence of what the funder actually funded,
+    which is what phase 2 writing work needs. Returns (current, entries)."""
+    historical = [m for m in ranked if m.get("lifecycle_status") in HISTORICAL_LIFECYCLE_STATUSES]
+    current = [m for m in ranked if m.get("lifecycle_status") not in HISTORICAL_LIFECYCLE_STATUSES]
+    if not historical:
+        return current, []
+    selected_steps.append("separate_historical_programs")
+    limitations.append(
+        f"{len(historical)} program(s) match this project but are closed, cancelled, "
+        "or one-time appropriations - see historical_precedent. Use them as writing "
+        "reference, not as targets."
+    )
+    entries = [
+        {
+            "program_id": m.get("program_id"),
+            "program_name": m.get("program_name"),
+            "score": m.get("score"),
+            "lifecycle_status": m.get("lifecycle_status"),
+            "why_not_a_target": m.get("lifecycle_notes"),
+            "precedent_confidence": m.get("precedent_confidence"),
+            "use_for": (
+                "Comparison and writing reference - what this funder actually "
+                "funded. Not an application target."
+            ),
+            "source_url": m.get("source_url"),
+        }
+        for m in historical[:PHASE_1_MERGED_TOP_N]
+    ]
+    return current, entries
 
 
 def _bounded_phase_1_top_n(value: Any) -> int:
@@ -1141,42 +1286,9 @@ def _run_phase_1(session: dict[str, Any], *, depth: str, top_n: int) -> dict[str
         unreachable = [m for m in ranked_matches if m.get("access_path") in UNREACHABLE_ACCESS_PATHS]
         reachable = [m for m in ranked_matches if m.get("access_path") not in UNREACHABLE_ACCESS_PATHS]
 
-        # Programs that are over are separated rather than dropped. They cannot
-        # be applied to, but they are the best available evidence of what this
-        # funder actually funded, which is what phase 2 writing work needs.
-        historical = [
-            m for m in reachable if m.get("lifecycle_status") in HISTORICAL_LIFECYCLE_STATUSES
-        ]
-        current = [
-            m for m in reachable if m.get("lifecycle_status") not in HISTORICAL_LIFECYCLE_STATUSES
-        ]
-
+        current, historical_precedent = _separate_historical(reachable, selected_steps, limitations)
         top_matches = current[:top_n]
         session["current_target_programs"] = deepcopy(top_matches)
-
-        if historical:
-            historical_precedent = [
-                {
-                    "program_id": m.get("program_id"),
-                    "program_name": m.get("program_name"),
-                    "score": m.get("score"),
-                    "lifecycle_status": m.get("lifecycle_status"),
-                    "why_not_a_target": m.get("lifecycle_notes"),
-                    "precedent_confidence": m.get("precedent_confidence"),
-                    "use_for": (
-                        "Comparison and writing reference - what this funder actually "
-                        "funded. Not an application target."
-                    ),
-                    "source_url": m.get("source_url"),
-                }
-                for m in historical[:PHASE_1_MERGED_TOP_N]
-            ]
-            selected_steps.append("separate_historical_programs")
-            limitations.append(
-                f"{len(historical)} program(s) match this project but are closed, cancelled, "
-                "or one-time appropriations - see historical_precedent. Use them as writing "
-                "reference, not as targets."
-            )
 
         # "recurring" means it comes back; "open" means there is something to
         # apply to today. Only the latter carries a live deadline.
@@ -1235,7 +1347,8 @@ def _run_phase_1(session: dict[str, Any], *, depth: str, top_n: int) -> dict[str
             has_match_funding=bool(_field_value(profile, "has_match_funding")),
         )
         selected_steps.append("match_programs")
-        top_matches = list(matches[:top_n])
+        current, historical_precedent = _separate_historical(matches, selected_steps, limitations)
+        top_matches = current[:top_n]
         session["current_target_programs"] = deepcopy(top_matches)
         limitations.append(
             "This country's backend has no readiness score yet; matches are ordered by direct "
@@ -1260,6 +1373,11 @@ def _run_phase_1(session: dict[str, Any], *, depth: str, top_n: int) -> dict[str
         limitations.append(
             "Open-option links are official program pages to check; this country's backend does "
             "not verify per-program open/closed status."
+        )
+    elif any(entry["opportunity_status"] == "checked_snapshot" for entry in open_now_summary):
+        limitations.append(
+            "Shortlist open status comes from the data bundle's opportunity snapshot, which can be "
+            "months old. Select a program and ask whether it is open right now for a live check."
         )
 
     evidence, evidence_steps, evidence_limitations = _collect_regional_and_live_evidence(country_code, profile)
@@ -1471,18 +1589,22 @@ def _run_phase_3(session: dict[str, Any], *, request_text: str) -> dict[str, Any
         }
 
     capability_gaps: list[dict[str, Any]] = []
+    opportunity_status = None
     if ga.supports(country_code, "live_opportunity_check"):
+        # None when the program has no lookup code (e.g. a state program with
+        # no Grants.gov listing); that falls through to the program page.
         opportunity_status = backend.check_program_opportunity(selected_program_id)
-        if opportunity_status is None:
-            return _error_result(
-                "grant_analyze_current_phase",
-                "missing_program_code",
-                f"Could not resolve an opportunity lookup code for program '{selected_program_id}'.",
-                session_id=session["session_id"],
-                phase_run=PHASE_3,
-            )
         selected_steps = ["check_open_opportunity"]
+        gap_note = (
+            "This program has no Grants.gov lookup code; the official program page is "
+            "returned to check instead, and the status is unverified."
+        )
     else:
+        gap_note = (
+            f"The {country_code} backend has no per-program open/closed lookup; the official "
+            "program page is returned to check instead, and the status is unverified."
+        )
+    if opportunity_status is None:
         entry = _program_entry(session, backend, selected_program_id)
         opportunity_status = _program_page_check(entry) or {
             "program_id": selected_program_id,
@@ -1495,10 +1617,7 @@ def _run_phase_3(session: dict[str, Any], *, request_text: str) -> dict[str, Any
         capability_gaps.append({
             "request": "open_status",
             "capability": "live_opportunity_check",
-            "note": (
-                f"The {country_code} backend has no per-program open/closed lookup; the official "
-                "program page is returned to check instead, and the status is unverified."
-            ),
+            "note": gap_note,
         })
 
     funding_mechanism_summary = {
@@ -1929,50 +2048,54 @@ def _infer_org_type(text_lower: str, country_code: str | None = None) -> str | N
     return None
 
 
+# Request words for each sector tag. Shared by intake inference and by the
+# live-lead relevance check, so both read a project the same way.
+SECTOR_TAG_TOKENS = {
+    "disaster_recovery": ("disaster recovery", "recovery", "reconstruction"),
+    "hazard_mitigation": (
+        "hazard mitigation", "mitigation", "risk reduction", "fuel reduction", "fuel treatment",
+        "fuel management", "firesmart",
+    ),
+    "community_resilience": ("resilience", "preparedness"),
+    "climate_adaptation": ("climate", "adaptation"),
+    "green_infrastructure": ("green infrastructure",),
+    "wildfire": ("wildfire", "wildland fire", "fuel reduction", "fuel treatment", "fuel management", "firesmart"),
+    "wildfire_management": ("wildfire", "wildland fire", "fuel reduction", "fuel treatment", "fuel management", "firesmart"),
+    "flood_mitigation": ("flood", "flooding"),
+    "evacuation": ("evacuation", "evacuate"),
+    "emergency_response": ("emergency response", "emergency preparedness", "evacuation"),
+    "disaster_resilience": ("disaster resilience", "disaster preparedness"),
+    "forestry": ("forestry", "forest", "wood products", "biochar"),
+    "food_security": ("food system", "food security", "agriculture", "agtech", "farm", "grower"),
+    "rural_economic_development": ("rural economic", "rural community", "agtech", "farm", "grower"),
+    "innovation_ecosystem": ("innovation ecosystem", "startup", "startups", "agtech", "field trial"),
+    "economic_development": ("economic development", "workforce", "entrepreneur", "startup"),
+    "workforce": ("workforce", "job training", "worker training", "employment training"),
+    "broadband": ("broadband", "internet access", "digital equity", "connectivity"),
+    "transportation": ("transportation", "road", "roads", "access road", "mobility"),
+    "access_to_capital": ("access to capital", "revolving loan", "credit gap", "capital gap"),
+    "entrepreneurship": ("entrepreneurship", "entrepreneur", "small business"),
+    "energy": ("energy", "grid", "hydrogen", "natural gas", "renewable"),
+    "regional_collaboration": ("multi-state", "regional collaboration", "cross-state"),
+    "commercialization": ("commercialization", "commercialize", "proof of concept", "prototype"),
+    "sbir_sttr": ("sbir", "sttr"),
+    "public_safety": ("public safety", "first responder", "first responders"),
+    "emergency_management": (
+        "emergency management", "emergency responder", "emergency responders", "emergency preparedness",
+    ),
+    "international_development": ("international development", "usaid", "foreign assistance"),
+    "humanitarian": ("humanitarian", "refugee"),
+    "research": ("research",),
+    "research_software": ("research software", "software platform", "software"),
+    "data_infrastructure": ("data infrastructure", "data platform", "data science", "datasets"),
+    "geospatial_analytics": ("geospatial", "mapping", "map", "remote sensing"),
+    "ai_data_science": ("ai", "machine learning", "data science"),
+    "capacity_building": ("capacity building",),
+}
+
+
 def _infer_sector_tags(text_lower: str) -> list[str]:
-    mapping = {
-        "disaster_recovery": ("disaster recovery", "recovery", "reconstruction"),
-        "hazard_mitigation": (
-            "hazard mitigation", "mitigation", "risk reduction", "fuel reduction", "fuel treatment",
-            "fuel management", "firesmart",
-        ),
-        "community_resilience": ("resilience", "preparedness"),
-        "climate_adaptation": ("climate", "adaptation"),
-        "green_infrastructure": ("green infrastructure",),
-        "wildfire": ("wildfire", "wildland fire", "fuel reduction", "fuel treatment", "fuel management", "firesmart"),
-        "wildfire_management": ("wildfire", "wildland fire", "fuel reduction", "fuel treatment", "fuel management", "firesmart"),
-        "flood_mitigation": ("flood", "flooding"),
-        "evacuation": ("evacuation", "evacuate"),
-        "emergency_response": ("emergency response", "emergency preparedness", "evacuation"),
-        "disaster_resilience": ("disaster resilience", "disaster preparedness"),
-        "forestry": ("forestry", "forest", "wood products", "biochar"),
-        "food_security": ("food system", "food security", "agriculture", "agtech", "farm", "grower"),
-        "rural_economic_development": ("rural economic", "rural community", "agtech", "farm", "grower"),
-        "innovation_ecosystem": ("innovation ecosystem", "startup", "startups", "agtech", "field trial"),
-        "economic_development": ("economic development", "workforce", "entrepreneur", "startup"),
-        "workforce": ("workforce", "job training", "worker training", "employment training"),
-        "broadband": ("broadband", "internet access", "digital equity", "connectivity"),
-        "transportation": ("transportation", "road", "roads", "access road", "mobility"),
-        "access_to_capital": ("access to capital", "revolving loan", "credit gap", "capital gap"),
-        "entrepreneurship": ("entrepreneurship", "entrepreneur", "small business"),
-        "energy": ("energy", "grid", "hydrogen", "natural gas", "renewable"),
-        "regional_collaboration": ("multi-state", "regional collaboration", "cross-state"),
-        "commercialization": ("commercialization", "commercialize", "proof of concept", "prototype"),
-        "sbir_sttr": ("sbir", "sttr"),
-        "public_safety": ("public safety", "first responder", "first responders"),
-        "emergency_management": (
-            "emergency management", "emergency responder", "emergency responders", "emergency preparedness",
-        ),
-        "international_development": ("international development", "usaid", "foreign assistance"),
-        "humanitarian": ("humanitarian", "refugee"),
-        "research": ("research",),
-        "research_software": ("research software", "software platform", "software"),
-        "data_infrastructure": ("data infrastructure", "data platform", "data science", "datasets"),
-        "geospatial_analytics": ("geospatial", "mapping", "map", "remote sensing"),
-        "ai_data_science": ("ai", "machine learning", "data science"),
-        "capacity_building": ("capacity building",),
-    }
-    tags = [tag for tag, tokens in mapping.items() if any(_mentions(text_lower, token) for token in tokens)]
+    tags = [tag for tag, tokens in SECTOR_TAG_TOKENS.items() if any(_mentions(text_lower, token) for token in tokens)]
     return sorted(set(tags))
 
 
@@ -2123,9 +2246,10 @@ def _program_page_check(item: dict[str, Any]) -> dict[str, Any] | None:
 def _open_now_summary(country_code: str, top_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Open status for each shortlist entry, in one shape for every country.
 
-    A backend with live_opportunity_check reports the checked status it
-    attached during scoring; any other backend gets a program-page check,
-    labelled unverified rather than presented as a status."""
+    A backend with live_opportunity_check reports the status it attached
+    during scoring, labelled by where it came from (scoring reads the
+    bundle snapshot, so it is usually checked_snapshot); any other backend
+    gets a program-page check, labelled unverified."""
     if not ga.supports(country_code, "live_opportunity_check"):
         return [check for check in (_program_page_check(item) for item in top_matches) if check]
     summary = []
@@ -2137,7 +2261,7 @@ def _open_now_summary(country_code: str, top_matches: list[dict[str, Any]]) -> l
             "program_id": item.get("program_id"),
             "program_name": item.get("program_name"),
             "source_url": item.get("source_url"),
-            "opportunity_status": "checked",
+            "opportunity_status": "checked_live" if opportunity.get("checked_live") else "checked_snapshot",
             "is_currently_open": opportunity.get("is_currently_open"),
             "funding_mechanism": _first_opportunity_mechanism(opportunity),
         })

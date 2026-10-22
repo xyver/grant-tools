@@ -114,9 +114,8 @@ same `data/countries/` layout as the downloadable bundles.
 ## Announcement collectors
 
 The included ARC, California, Canada, and US State Department collectors can
-run independently of
-the historical pipeline. List them, probe feeds without writing, and then run
-the ones you want:
+run independently of the historical pipeline. List them, probe feeds without
+writing, and then run the ones you want:
 
 ```powershell
 .\.venv\Scripts\python collectors\run_all.py --list
@@ -130,6 +129,17 @@ daily with Task Scheduler or cron for ongoing checks. Use
 `GRANT_COLLECTORS=none` to disable scheduled polls. Each collector also runs on
 its own (`python collectors\arc_grant_announcements.py`) and supports `--probe`.
 The collectors need no API keys. Their snapshots go to `GRANT_STATE_DIR`.
+
+Phase 1 reads the snapshots that apply to the project (ARC for Appalachia,
+California for California, Canada for Canadian projects, State Department for
+international work) and returns only leads about the project's sectors and
+place in `regional_evidence`. When a feed has funding news but none of it fits,
+the result says so (`relevance_note`) rather than listing unrelated items.
+
+"Is this program open right now?" asks Grants.gov live for US federal
+programs. The shortlist's open status comes from the bundle's opportunity
+snapshot and is labelled `checked_snapshot`; programs without a Grants.gov code
+(state programs, Canada) return their official program page to check.
 
 ### Sources
 
