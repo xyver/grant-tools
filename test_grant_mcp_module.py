@@ -6,6 +6,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import grant_mcp_module as gm  # noqa: E402
+import runtime_paths  # noqa: E402
+
+
+def requires_country_data(iso3):
+    """Skip a test when that country's bundle is not under GRANT_DATA_ROOT."""
+    present = (runtime_paths.DATA_ROOT / "countries" / iso3).is_dir()
+    return unittest.skipUnless(present, f"{iso3} grant data bundle not installed under GRANT_DATA_ROOT")
 
 
 class GrantMcpModuleTests(unittest.TestCase):
@@ -43,6 +50,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         )
         self.assertEqual(result["outcome"], gm.OUTCOME_OUT_OF_SCOPE)
 
+    @requires_country_data("USA")
     def test_phase_one_analysis_returns_shortlist(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -61,6 +69,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertEqual(result["phase_run"], gm.PHASE_1)
         self.assertTrue(result["top_matches"])
 
+    @requires_country_data("USA")
     def test_phase_one_top_n_is_requestable_and_bounded(self):
         intake = gm.grant_intake_or_update_project(
             project_input="We are a nonprofit working on resilience in North Carolina.",
@@ -79,6 +88,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         bounded = gm.grant_analyze_current_phase(session_id=intake["session_id"], top_n=100)
         self.assertLessEqual(len(bounded["top_matches"]), gm.PHASE_1_MAX_TOP_N)
 
+    @requires_country_data("USA")
     def test_phase_one_california_adds_state_evidence_separate_from_top_matches(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -102,6 +112,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertTrue(result["top_matches"])
         self.assertTrue(any("California state evidence" in item for item in result["limitations"]))
 
+    @requires_country_data("USA")
     def test_phase_one_california_shelter_access_surfaces_curated_state_programs(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -138,6 +149,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertEqual(statuses.get("lci_apgp"), "watchlist_closed")
         self.assertIn("match_california_curated_programs", result["selected_workflow_steps"])
 
+    @requires_country_data("USA")
     def test_phase_one_appalachia_adds_arc_live_evidence(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -159,6 +171,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertIn("live_announcement", layers)
         self.assertTrue(any("ARC live announcements" in item for item in result["limitations"]))
 
+    @requires_country_data("USA")
     def test_phase_one_appalachia_infrastructure_surfaces_expanded_arc_rows(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -187,6 +200,7 @@ class GrantMcpModuleTests(unittest.TestCase):
             "arc_local_access_roads",
         } & ids)
 
+    @requires_country_data("USA")
     def test_phase_one_appalachia_workforce_surfaces_arc_worc_or_arise(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -210,6 +224,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         ids = {item.get("program_id") for item in arc_evidence.get("programs") or []}
         self.assertTrue({"arc_worc", "arc_arise", "arc_access_to_capital"} & ids)
 
+    @requires_country_data("USA")
     def test_phase_one_northern_virginia_does_not_add_arc_live_evidence(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -234,6 +249,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertIn("virginia", result["localization_summary"]["regional_source_scopes"])
         self.assertNotIn("appalachia", result["localization_summary"]["regional_source_scopes"])
 
+    @requires_country_data("USA")
     def test_phase_one_gmu_commercialization_surfaces_virginia_programs(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -328,6 +344,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         # org_type is snapped onto the backend's exact-match vocabulary.
         self.assertEqual(intake["project_profile"]["org_type"]["value"], "nonprofit_501c3")
 
+    @requires_country_data("USA")
     def test_unreachable_programs_are_split_out_of_the_shortlist(self):
         """A program can be the right applicant type and still have no way to
         submit - FEMA PA has no application, ARC ARISE needs an invitation.
@@ -360,6 +377,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         for match in result["top_matches"]:
             self.assertNotIn(match.get("access_path"), gm.UNREACHABLE_ACCESS_PATHS)
 
+    @requires_country_data("USA")
     def test_closed_programs_move_to_historical_precedent(self):
         """A one-time 2012 appropriation scored 85 and sat in the shortlist.
         It is worthless as a target and useful as precedent, so it is
@@ -519,6 +537,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         ids = [item.get("program_id") for item in result.get("top_matches") or []]
         self.assertEqual(ids[:2], ["can_bc_ubcm_cepf", "can_bc_ubcm_cri"])
 
+    @requires_country_data("USA")
     def test_phase_two_without_selected_program_clarifies(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -539,6 +558,7 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], gm.OUTCOME_CLARIFICATION)
         self.assertEqual(result["phase_run"], gm.PHASE_2)
 
+    @requires_country_data("USA")
     def test_select_program_allows_phase_two_memo(self):
         intake = gm.grant_intake_or_update_project(
             project_input=(
@@ -561,6 +581,203 @@ class GrantMcpModuleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], gm.OUTCOME_OK)
         self.assertEqual(result["phase_run"], gm.PHASE_2)
         self.assertIsNotNone(result["memo_support"])
+
+    @requires_country_data("USA")
+    def test_phase_two_memo_scores_first_when_no_phase_one_ran(self):
+        intake = gm.grant_intake_or_update_project(
+            project_input="We are a nonprofit 501c3 working on disaster recovery in Appalachia.",
+            profile_overrides={
+                "recipient_loc_id": "USA-NC",
+                "place_of_performance_loc_id": "USA-NC",
+                "has_government_partner": True,
+            },
+        )
+        session = gm._SESSIONS[intake["session_id"]]  # get_session returns a copy
+        session["current_selected_program_id"] = "fema_bric"
+        session["current_scored_results"] = None
+        result = gm.grant_analyze_current_phase(
+            session_id=intake["session_id"],
+            analysis_request="Build memo talking points for this target.",
+        )
+        self.assertEqual(result["outcome"], gm.OUTCOME_OK)
+        self.assertIsNotNone(result["memo_support"])
+
+
+class UnifiedCountryWorkflowTests(unittest.TestCase):
+    """Every country runs one workflow; gaps come back in one shape."""
+
+    BC_WILDFIRE = (
+        "We are a BC nonprofit society doing wildfire and flood mitigation and community "
+        "resilience work: FireSmart fuel treatment, emergency preparedness training, and "
+        "evacuation planning for rural communities."
+    )
+
+    def setUp(self):
+        self._prior_grant_data_mode = os.environ.get("GRANT_MCP_DATA_MODE")
+        os.environ["GRANT_MCP_DATA_MODE"] = "local"
+        gm.reset_sessions()
+
+    def tearDown(self):
+        if self._prior_grant_data_mode is None:
+            os.environ.pop("GRANT_MCP_DATA_MODE", None)
+        else:
+            os.environ["GRANT_MCP_DATA_MODE"] = self._prior_grant_data_mode
+
+    def _bc_session(self):
+        intake = gm.grant_intake_or_update_project(
+            project_input=self.BC_WILDFIRE,
+            country_code="CA",
+            profile_overrides={
+                "org_type": "nonprofit",
+                "recipient_loc_id": "CAN-BC-5953-023",
+                "project_area_loc_ids": ["CAN-BC-5953"],
+            },
+        )
+        self.assertEqual(intake["outcome"], gm.OUTCOME_OK)
+        return intake
+
+    def test_sector_tags_match_words_not_substrings(self):
+        tags = gm._infer_sector_tags(self.BC_WILDFIRE.lower())
+        self.assertNotIn("ai_data_science", tags)  # "ai" inside "training"
+        for expected in ("wildfire_management", "emergency_response", "evacuation", "community_resilience"):
+            self.assertIn(expected, tags)
+        self.assertIn("ai_data_science", gm._infer_sector_tags("an ai model for flood forecasting"))
+        self.assertNotIn("ai_data_science", gm._infer_sector_tags("foreign aid delivery"))
+
+    def test_phase_inference_routes_precedent_and_open_status(self):
+        self.assertEqual(gm._infer_phase("What precedent evidence should I cite before writing?",
+                                         phase_hint=None, existing_phase=None)[0], gm.PHASE_2)
+        self.assertEqual(gm._infer_phase("Compare my application framing to historical winners.",
+                                         phase_hint=None, existing_phase=None)[0], gm.PHASE_2)
+        self.assertEqual(gm._infer_phase("Is this program open right now?",
+                                         phase_hint=None, existing_phase=None)[0], gm.PHASE_3)
+        self.assertEqual(gm._infer_phase("Show me maps of the project area.",
+                                         phase_hint=None, existing_phase=None)[0], gm.PHASE_1)
+
+    def test_bad_argument_name_is_a_typed_error(self):
+        result = gm.call_tool("grant_set_phase", {"session_id": "gs_x", "phase": "phase_1_prospect_research"})
+        self.assertEqual(result["outcome"], gm.OUTCOME_ERROR)
+        self.assertEqual(result["error"]["code"], "invalid_arguments")
+        self.assertIn("phase_id", result["error"]["message"])
+
+    def test_canada_org_type_synonyms_snap_to_canada_vocabulary(self):
+        intake = gm.grant_intake_or_update_project(
+            project_input="A university wildfire research group.",
+            country_code="CAN",
+            profile_overrides={"org_type": "university", "recipient_loc_id": "CAN-BC", "project_area_loc_ids": ["CAN-BC"]},
+        )
+        self.assertEqual(intake["project_profile"]["org_type"]["value"], "academia")
+
+    def test_canada_phase_one_reports_precedent_by_default(self):
+        intake = self._bc_session()
+        result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
+        self.assertEqual(result["outcome"], gm.OUTCOME_OK)
+        ids = [m["program_id"] for m in result["top_matches"]]
+        self.assertIn("can_psc_community_resilience_fund", ids)
+        by_id = {p["program_id"]: p for p in result["precedent_summary"]}
+        self.assertEqual(set(by_id), set(ids))
+        self.assertTrue(by_id["can_psc_community_resilience_fund"]["found"])
+        self.assertGreater(by_id["can_psc_community_resilience_fund"]["award_count"], 0)
+
+    def test_canada_phase_two_and_three_use_the_shared_capability_paths(self):
+        intake = self._bc_session()
+        sid = intake["session_id"]
+        gm.grant_analyze_current_phase(session_id=sid)
+        gm.grant_select_target_program(session_id=sid, program_id="can_psc_community_resilience_fund")
+
+        precedent = gm.grant_analyze_current_phase(
+            session_id=sid, analysis_request="What precedent evidence should I cite before writing?"
+        )
+        self.assertEqual(precedent["outcome"], gm.OUTCOME_OK)
+        self.assertEqual(precedent["phase_run"], gm.PHASE_2)
+        self.assertTrue(precedent["program_precedent"]["found"])
+        self.assertEqual(precedent["capability_gaps"], [])
+
+        memo = gm.grant_analyze_current_phase(session_id=sid, analysis_request="Build memo talking points.")
+        self.assertEqual(memo["outcome"], gm.OUTCOME_UNSUPPORTED_COUNTRY)
+        self.assertEqual(memo["capability_gaps"][0]["capability"], "readiness_scoring")
+        self.assertIn("program_precedent", memo["supported_requests"])
+
+        open_check = gm.grant_analyze_current_phase(session_id=sid, analysis_request="Is this program open right now?")
+        self.assertEqual(open_check["outcome"], gm.OUTCOME_OK)
+        self.assertEqual(open_check["phase_run"], gm.PHASE_3)
+        self.assertEqual(open_check["opportunity_status"]["opportunity_status"], "program_page_check_required")
+        self.assertIsNone(open_check["opportunity_status"]["is_currently_open"])
+        self.assertEqual(open_check["capability_gaps"][0]["capability"], "live_opportunity_check")
+
+    def test_canada_live_announcements_are_read(self):
+        import json
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as state_dir:
+            collector_dir = Path(state_dir) / "canada_grant_announcements"
+            collector_dir.mkdir()
+            snapshot = {
+                "fetched_at": "2026-10-21T00:00:00+00:00",
+                "payload_summary": {"recent_items": [
+                    {"id": "1", "title": "New funding for community wildfire resilience", "link": "https://example.org/1"},
+                ]},
+            }
+            (collector_dir / "snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+            with mock.patch.object(gm, "STATE_DIR", Path(state_dir)):
+                intake = self._bc_session()
+                result = gm.grant_analyze_current_phase(session_id=intake["session_id"])
+        live = [e for e in result["regional_evidence"] if e.get("collector") == "canada_grant_announcements"]
+        self.assertEqual(len(live), 1)
+        self.assertTrue(live[0]["found"])
+        self.assertIn("read_canada_live_announcements", result["selected_workflow_steps"])
+
+    def test_unresolved_place_text_is_explained_not_silent(self):
+        from unittest import mock
+        import geometry_client
+
+        ambiguous = ({"from": {"candidates": [
+            {"loc_id": "USA-OR-067", "name": "Washington County", "admin_level": 2},
+            {"loc_id": "USA-PA-125", "name": "Washington County", "admin_level": 2},
+        ]}}, True)
+        with mock.patch.object(geometry_client, "_call_tool", return_value=ambiguous):
+            intake = gm.grant_intake_or_update_project(
+                project_input="A nonprofit 501c3 doing flood mitigation.",
+                country_code="US",
+                profile_overrides={"recipient_location_text": "Washington County", "project_area_text": "Washington County"},
+            )
+        self.assertEqual(intake["outcome"], gm.OUTCOME_CLARIFICATION)
+        self.assertEqual({p["status"] for p in intake["unresolved_places"]}, {"ambiguous"})
+        self.assertTrue(any("USA-OR-067" in note for note in intake["notes"]))
+
+
+class GeometryClientTests(unittest.TestCase):
+    """The client sends one ISO3 scope and passes ambiguity through."""
+
+    def test_admin_lookup_sends_iso3(self):
+        from unittest import mock
+        import geometry_client
+
+        reply = ({"from": {"resolved_loc_id": "CAN-BC-5953-023", "match_type": "direct_admin_name"}}, True)
+        with mock.patch.object(geometry_client, "_call_tool", return_value=reply) as call:
+            result = geometry_client.resolve_place("Prince George, British Columbia", country="CAN")
+        self.assertEqual(result["loc_id"], "CAN-BC-5953-023")
+        self.assertEqual(call.call_args.args[1]["iso3"], "CAN")
+        self.assertNotIn("country_hint", call.call_args.args[1])
+
+    def test_unreachable_service_is_reported(self):
+        from unittest import mock
+        import geometry_client
+
+        with mock.patch.object(geometry_client, "_call_tool", return_value=(None, False)):
+            result = geometry_client.resolve_place("Fairfax County, Virginia", country="US")
+        self.assertIsNone(result["loc_id"])
+        self.assertEqual(result["status"], geometry_client.STATUS_UNAVAILABLE)
+
+    def test_zip_maps_to_county(self):
+        from unittest import mock
+        import geometry_client
+
+        reply = ({"from": {"resolved_loc_id": "USA-NC-021-000900-POSTAL-28801"}}, True)
+        with mock.patch.object(geometry_client, "_call_tool", return_value=reply):
+            result = geometry_client.resolve_place("28801", country="US")
+        self.assertEqual(result["loc_id"], "USA-NC-021")
 
 
 if __name__ == "__main__":

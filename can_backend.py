@@ -66,6 +66,42 @@ CAPABILITIES = {
                                        # lookup - genuinely not the same
                                        # capability as US's Grants.gov check.
     "writing_template": False,
+    "budget_framework": False,
+    "precedent_text": False,
+}
+
+# Free-text applicant types mapped onto Canada's recipient_type vocabulary
+# (grant_mcp_module snaps org_type through it at intake).
+ORG_TYPE_SYNONYMS = {
+    "nonprofit_501c3": "nonprofit",
+    "501c3": "nonprofit",
+    "non_profit": "nonprofit",
+    "not_for_profit": "nonprofit",
+    "nonprofit_organization": "nonprofit",
+    "charity": "nonprofit",
+    "society": "nonprofit",
+    "foundation": "nonprofit",
+    "university": "academia",
+    "college": "academia",
+    "higher_ed": "academia",
+    "higher_education": "academia",
+    "academic": "academia",
+    "research_institute": "academia",
+    "municipality": "government",
+    "municipal": "government",
+    "municipal_government": "government",
+    "local_government": "government",
+    "city": "government",
+    "regional_district": "government",
+    "provincial_government": "government",
+    "first_nation": "indigenous",
+    "first_nations": "indigenous",
+    "tribal_government": "indigenous",
+    "business": "for_profit",
+    "company": "for_profit",
+    "small_business": "for_profit",
+    "for_profit_business": "for_profit",
+    "ngo": "international_ngo",
 }
 
 # Real province/territory geography scopes currently in use - province-
@@ -447,6 +483,52 @@ def get_can_precedent(program_id):
                       "prediction of whether any specific application will be funded - same "
                       "honesty constraint as the US backend.",
     }
+
+
+def province_from_loc_id(loc_id):
+    raw = str(loc_id or "").strip().upper()
+    parts = raw.split("-")
+    if len(parts) >= 2 and parts[0] == "CAN":
+        return parts[1]
+    return None
+
+
+def match_programs_for_profile(*, org_type, sector_tags=None, recipient_loc_id=None,
+                               place_loc_ids=None, has_government_partner=False,
+                               has_match_funding=False):
+    """Shared backend interface (discovery without readiness scoring).
+
+    Geography is province-level here, so the province comes from the place
+    of performance first, then the applicant's home."""
+    province = None
+    for loc_id in list(place_loc_ids or []) + [recipient_loc_id]:
+        province = province_from_loc_id(loc_id)
+        if province:
+            break
+    return match_can_grant_programs(
+        org_type=org_type,
+        sector_tags=sector_tags,
+        province=province,
+        has_government_partner=has_government_partner,
+        has_match_funding=has_match_funding,
+    )
+
+
+def get_program_precedent(program_id, org_type=None):
+    """Shared backend interface (see grant_analyzer): precedent for one
+    catalog program. org_type is accepted for interface parity; Canada's
+    summary data has no per-applicant alignment note."""
+    return get_can_precedent(program_id)
+
+
+def get_regional_award_evidence(*, place_loc_ids=None, recipient_loc_id=None, sector_tags=None):
+    """Shared backend interface: provincial award history where one exists.
+    Returns a list of evidence blocks (empty when no provincial table
+    covers the project)."""
+    provinces = {province_from_loc_id(loc_id) for loc_id in list(place_loc_ids or []) + [recipient_loc_id]}
+    if "BC" not in provinces:
+        return []
+    return [get_bc_award_precedents(sector_tags=sector_tags, max_examples=3)]
 
 
 def get_grant_writing_template(program_id):

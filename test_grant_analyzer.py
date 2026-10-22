@@ -45,6 +45,13 @@ import grant_analyzer
 from tristate import parse_tristate
 from schema import validate_programs_df, SchemaError
 import proposal_sections
+import runtime_paths
+
+
+def requires_country_data(iso3):
+    """Skip a test when that country's bundle is not under GRANT_DATA_ROOT."""
+    present = (runtime_paths.DATA_ROOT / "countries" / iso3).is_dir()
+    return unittest.skipUnless(present, f"{iso3} grant data bundle not installed under GRANT_DATA_ROOT")
 
 _PRIOR_GRANT_DATA_MODE = None
 
@@ -166,6 +173,7 @@ class UsBackendWoodlandsMissionTests(unittest.TestCase):
         self.assertTrue(all(eligible_flags[:first_blocked_index]))
 
 
+@requires_country_data("USA")
 class UsBackendScoringTests(unittest.TestCase):
     def test_score_is_bounded_0_to_100(self):
         result = us_backend.score_and_rank_programs(
@@ -216,6 +224,7 @@ class UsBackendPriorAwardsRobustnessTests(unittest.TestCase):
         result = us_backend.check_prior_federal_awards("")
         self.assertFalse(result["has_prior_awards"])
 
+    @requires_country_data("USA")
     def test_false_positive_name_is_surfaced_not_hidden(self):
         # "Heart to Heart" is documented to match an unrelated org
         # ("HEART TO HEART INTERNATIONAL INC") - confirm matched_recipient_
@@ -375,6 +384,7 @@ class ArcCfdaMappingTests(unittest.TestCase):
         ]
         self.assertEqual(missing, [], f"ARC rows missing cfda_number: {missing}")
 
+    @requires_country_data("USA")
     def test_arc_cfda_codes_exist_in_the_award_summary(self):
         """A mapped CFDA that isn't in the summary parquet yields no precedent,
         which is the same silent hole as having no CFDA at all."""
@@ -386,6 +396,7 @@ class ArcCfdaMappingTests(unittest.TestCase):
                 with self.subTest(program=row["program_id"], cfda=code):
                     self.assertIn(code, known)
 
+    @requires_country_data("USA")
     def test_arc_area_development_resolves_real_precedent(self):
         precedent = us_backend.get_grant_precedents("23.002", org_type="nonprofit_501c3")
         self.assertTrue(precedent.get("found"))
@@ -400,6 +411,7 @@ class ArcCfdaMappingTests(unittest.TestCase):
             )
         )
 
+    @requires_country_data("USA")
     def test_arc_programs_are_scored_for_an_appalachian_nonprofit(self):
         scored = us_backend.score_and_rank_programs(
             org_type="nonprofit_501c3",

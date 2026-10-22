@@ -22,12 +22,26 @@ per country (the international/USAID branch already inside
 us_backend.score_and_rank_programs was a live example of exactly that
 pattern starting to happen).
 
-No formal CountryGrantBackend interface exists yet - deliberately. With
-one full implementation and one partial one, the real shared method
-signatures aren't visible yet. Revisit once can_backend gets a real
-scoring function (a second full implementation) - that's when the actual
-shared shape between two complete backends becomes visible, instead of
-guessed.
+The workflow in grant_mcp_module.py is the same for every country: it
+branches on supports(country, capability), never on the country code, and
+reports a missing capability in the same response shape everywhere. Each
+backend therefore exposes, under the same names:
+
+    CAPABILITIES                     the dict supports() reads
+    ORG_TYPE_SYNONYMS                free-text applicant type -> catalog vocabulary
+    load_programs()                  the curated program catalog
+    get_program_precedent(program_id, org_type=None)    when "precedent"
+    score_and_rank_programs(...)     when "readiness_scoring"
+    match_programs_for_profile(...)  discovery when there is no readiness score
+    check_program_opportunity(program_id)               when "live_opportunity_check"
+    build_budget_framework(...)      when "budget_framework"
+    score_proposal_structure(...)    when "writing_template"
+    find_similar_precedent_text(...) when "precedent_text"
+    build_memo_talking_points(...)   with "readiness_scoring"
+
+A new country adds a backend with these names and its CAPABILITIES; the
+workflow needs no new branch. Regional and live-announcement sources are
+rows in grant_mcp_module's provider tables, tagged by country.
 
 Usage:
     import grant_analyzer as ga

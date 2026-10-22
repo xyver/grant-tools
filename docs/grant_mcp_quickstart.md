@@ -151,7 +151,9 @@ Normal users do not need to know loc_ids. The MCP resolves ordinary place names
 through the shared DaedalMap location spine when possible, then stores canonical
 `recipient_loc_id`, `place_of_performance_loc_id`, and `project_area_loc_ids`
 internally. If loc_ids are already known, passing them directly is still
-supported.
+supported. A place that does not resolve is listed in `unresolved_places` with
+its status (`ambiguous`, `not_found`, or `lookup_unavailable`) and any candidate
+loc_ids, and `notes` says what to send instead.
 
 Repeated calls with the same `session_id` accumulate the project narrative
 rather than replacing it, so a short follow-up correction does not discard the
@@ -194,14 +196,17 @@ Expected result:
 - official program/opportunity links to check next
 - recommended next step
 
-Important distinction:
+Every country returns the same fields. What differs is which capabilities its
+backend has:
 
-- US results can include a Grants.gov-backed `open_now_summary` where the
-  backend supports open/closed opportunity checks.
-- Canada results currently include official program-page checks in
-  `open_now_summary` with `opportunity_status =
-  program_page_check_required`. These are actionable links, but they are not a
-  verified open/closed status.
+- `precedent_summary` lists past-award counts for every shortlisted program.
+- `open_now_summary` entries have `opportunity_status = checked` where the
+  backend has a live open/closed check (US, Grants.gov), and
+  `opportunity_status = program_page_check_required` where it does not
+  (Canada). The second kind is an actionable link, not a verified status.
+- In phases 2 and 3, a request the country's backend cannot serve (for
+  example a memo or budget framework for Canada) is returned in
+  `capability_gaps`, with `supported_requests` listing what it can do.
 
 ## Typical Follow-Up Flow
 

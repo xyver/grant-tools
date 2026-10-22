@@ -8,9 +8,13 @@ blockers, pulling precedent from past awards, shortlisting, and helping with
 memos, budgets, and submission checklists. It never estimates odds of winning
 and does not handle post-award reporting.
 
-Coverage: **US** is full (discovery, precedent, readiness scoring, writing
-templates, live opportunities). **Canada** has discovery and precedent only,
-and says so rather than returning empty results.
+Coverage: every country runs the same workflow, and each country's backend
+declares what it can do. **US** supports everything: discovery, precedent,
+readiness scoring, memos, budget frameworks, writing templates, and live
+open-opportunity checks. **Canada** supports discovery, precedent for every
+shortlisted program, and program-page links for open status (labelled
+unverified). A request a country cannot serve comes back as a named
+`capability_gaps` entry, never as an empty result.
 
 Place handling uses DaedalMap `loc_id`s (stable identifiers for counties,
 states, provinces, and other places). Grant Tools calls DaedalMap's hosted
@@ -67,15 +71,21 @@ Settings come from environment variables or a `.env` file next to the code.
 | `GEOMETRY_MCP_URL` | `https://app.daedalmap.com/mcp` | DaedalMap geometry tools used for place to `loc_id` lookups |
 | `GRANT_MCP_HOST` / `GRANT_MCP_PORT` | `127.0.0.1` / `7020` | Where the server listens |
 | `GRANT_MCP_ACCESS_TOKENS` | empty | Comma-separated bearer tokens. Leave empty for local use; set before exposing the server beyond your machine |
+| `GRANT_DUCKDB_MEMORY_LIMIT` | `1GB` | Query memory cap. Country-wide USA queries need more than 256MB |
 
 ## Place lookups
 
 The grant tools need one thing from DaedalMap: turning place text (a county,
-state, ZIP code, or province) into a `loc_id`. They call the geometry tool
-`convert_reference` at `GEOMETRY_MCP_URL`, DaedalMap's hosted MCP by default.
-No setup or account is needed; a grant session makes only a few lookups, well
-inside the free anonymous allowance. You can also pass a `loc_id` directly in
-place of place text.
+state, ZIP code, province, or municipality) into a `loc_id`. They call the
+geometry tool `convert_reference` at `GEOMETRY_MCP_URL`, DaedalMap's hosted MCP
+by default. No setup or account is needed; a grant session makes only a few
+lookups, well inside the free anonymous allowance. You can also pass a `loc_id`
+directly in place of place text.
+
+Include the parent region for names that repeat: "Washington County, Oregon",
+"Prince George, British Columbia". When a name is ambiguous or not found,
+intake says so in `notes` and `unresolved_places`, with candidate `loc_id`s
+where the geometry tools returned them.
 
 ## Data
 
@@ -130,7 +140,7 @@ The collectors need no API keys. Their snapshots go to `GRANT_STATE_DIR`.
 | NIH RePORTER projects | Historical | Public domain (US government work) |
 | Grants.gov open opportunities | Historical (current snapshot) | US federal |
 | Canada Grants and Contributions | Historical | Open Government Licence - Canada |
-| Tri-Agency awards (SSHRC, CIHR, NSERC) | Historical | Open Government Licence - Canada |
+| Tri-Agency awards (SSHRC, CIHR, NSERC) | Historical (pipeline only; not in the Canada bundle yet) | Open Government Licence - Canada |
 | BC grant awards | Historical | Open Government Licence - BC |
 | California Grants Portal opportunities and awards | Historical | data.ca.gov |
 | ARC announcements | Collector | US federal-state commission |

@@ -78,6 +78,43 @@ CAPABILITIES = {
     "readiness_scoring": True,
     "live_opportunity_check": True,
     "writing_template": True,
+    "budget_framework": True,
+    "precedent_text": True,
+}
+
+# Free-text applicant types mapped onto this catalog's eligible_applicant_types
+# vocabulary (grant_mcp_module snaps org_type through it at intake).
+ORG_TYPE_SYNONYMS = {
+    "nonprofit": "nonprofit_501c3",
+    "non_profit": "nonprofit_501c3",
+    "nonprofit_organization": "nonprofit_501c3",
+    "non_profit_organization": "nonprofit_501c3",
+    "not_for_profit": "nonprofit_501c3",
+    "charity": "nonprofit_501c3",
+    "foundation": "nonprofit_501c3",
+    "ngo": "nonprofit_501c3",
+    "501c3": "nonprofit_501c3",
+    "501_c_3": "nonprofit_501c3",
+    "501c_3": "nonprofit_501c3",
+    "university": "higher_ed",
+    "college": "higher_ed",
+    "academia": "higher_ed",
+    "academic": "higher_ed",
+    "higher_education": "higher_ed",
+    "institution_of_higher_education": "higher_ed",
+    "city": "local_government",
+    "county": "local_government",
+    "municipality": "local_government",
+    "municipal": "local_government",
+    "municipal_government": "local_government",
+    "state_government": "state",
+    "state_agency": "state",
+    "tribe": "tribal_government",
+    "tribal": "tribal_government",
+    "business": "for_profit_business",
+    "company": "for_profit_business",
+    "for_profit": "for_profit_business",
+    "startup": "small_business",
 }
 
 # Cached loaders - these files get read repeatedly within a single
@@ -824,6 +861,37 @@ def get_grant_precedents(cfda_code, org_type=None):
             "of whether any specific application will be funded."
         ),
     }
+
+
+def program_cfda_code(program_id):
+    """First CFDA code of a catalog program, or None."""
+    df = load_programs()
+    match = df[df["program_id"] == program_id]
+    if match.empty:
+        return None
+    cfda_value = str(match.iloc[0]["cfda_number"] or "").strip()
+    if not cfda_value:
+        return None
+    return cfda_value.split("|")[0].strip()
+
+
+def get_program_precedent(program_id, org_type=None):
+    """Shared backend interface (see grant_analyzer): precedent for one
+    catalog program, keyed by program_id like every other backend."""
+    cfda_code = program_cfda_code(program_id)
+    if not cfda_code:
+        return {"found": False, "program_id": program_id,
+                "note": f"No CFDA code recorded for program '{program_id}'."}
+    return {"program_id": program_id, **get_grant_precedents(cfda_code, org_type=org_type)}
+
+
+def check_program_opportunity(program_id):
+    """Shared backend interface (live_opportunity_check): open-opportunity
+    status for one catalog program. None when it has no CFDA code."""
+    cfda_code = program_cfda_code(program_id)
+    if not cfda_code:
+        return None
+    return check_open_opportunity(cfda_code, live_fallback=False)
 
 
 def check_prior_federal_awards(org_name):
