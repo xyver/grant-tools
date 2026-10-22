@@ -251,12 +251,15 @@ class CanBackendBcWildfireTests(unittest.TestCase):
     def test_returns_matches(self):
         self.assertGreater(len(self.matches), 0)
 
-    def test_community_resilience_fund_present_and_eligible(self):
-        # The cleanest direct-nonprofit pathway found in the Canadian
-        # research - must keep matching a nonprofit org_type.
-        self.assertIn("can_psc_community_resilience_fund", self.by_id)
-        crf = self.by_id["can_psc_community_resilience_fund"]
-        self.assertTrue(crf["directly_eligible"])
+    def test_community_resilience_fund_is_not_a_disaster_match(self):
+        # Public Safety Canada's Community Resilience Fund counters
+        # radicalization to violence (checked 2026-10-22). It was tagged as
+        # disaster resilience from its name and topped wildfire shortlists.
+        self.assertNotIn("can_psc_community_resilience_fund", self.by_id)
+
+    def test_matches_carry_lifecycle_status(self):
+        self.assertTrue(all(m.get("lifecycle_status") for m in self.matches))
+        self.assertEqual(self.by_id["can_ps_red_cross_flood_fire"]["lifecycle_status"], "closed")
 
     def test_every_match_flags_unknown_match_funding(self):
         # Every row in canada_grant_funding_programs.csv has requires_

@@ -387,6 +387,8 @@ def match_can_grant_programs(org_type, sector_tags=None, province=None,
             "typical_award_size": row["typical_award_size"],
             "notes": row["notes"],
             "source_url": row["source_url"],
+            "lifecycle_status": (str(row.get("lifecycle_status") or "").strip().lower() or "unknown"),
+            "lifecycle_notes": (str(row.get("lifecycle_notes") or "").strip() or None),
         })
 
     results.sort(key=lambda r: (not r["directly_eligible"], -int(r.get("sector_overlap_count") or 0), len(r["blockers"])))
